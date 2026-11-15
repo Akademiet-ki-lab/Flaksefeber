@@ -1,4 +1,4 @@
-# Ørneflukt
+# Flaksefeber
 
 Et Flappy Bird-inspirert spill der en norsk havørn flyr gjennom snødekt granskog. Spillet kjører i nettleseren (laget for Google Chrome) og trenger ingen installasjon.
 

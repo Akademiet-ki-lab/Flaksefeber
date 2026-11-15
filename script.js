@@ -673,11 +673,11 @@
   shareBtn.addEventListener("click", () => {
     const text =
       score >= GOAL
-        ? "Jeg klarte alle 100 trær i Ørneflukt! Klarer du det?"
+        ? "Jeg klarte alle 100 trær i Flaksefeber! Klarer du det?"
         : "Jeg fløy forbi " +
           score +
           (score === 1 ? " tre" : " trær") +
-          " i Ørneflukt. Klarer du å slå meg?";
+          " i Flaksefeber. Klarer du å slå meg?";
     const manual = () => {
       shareOut.hidden = false;
       shareText.value = text;

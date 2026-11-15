@@ -1,4 +1,4 @@
-/* Ørneflukt: the 10 arenas.
+/* Flaksefeber: the 10 arenas.
    Each arena describes the sky, mountains, ground, weather and obstacles.
    Arena 1 reads its colours from the CSS variables in style.css (passed in as C). */
 window.makeArenas = function (C, rgba) {
