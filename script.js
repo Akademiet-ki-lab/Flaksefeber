@@ -15,7 +15,10 @@
     FLAP = -6.9,
     MAXFALL = 9.5,
     R = 11;
-  const KEY = "orneflukt-best",
+  const KEY = "orneflukt-best", // old single record (migrated to arena 1)
+    KEY_BESTS = "orneflukt-bests",
+    KEY_ARENAS = "orneflukt-arenas", // how many arenas are unlocked
+    KEY_ARENA = "orneflukt-arena", // chosen arena
     KEY_XP = "orneflukt-xp",
     KEY_SKIN = "orneflukt-skin";
   const MAX_XP = 200, // max level; level = total XP
@@ -170,6 +173,9 @@
     },
   ];
 
+  const ARENAS = window.makeArenas(C, rgba);
+  let A = ARENAS[0];
+
   /* ---- DOM ---- */
   const $ = (id) => document.getElementById(id);
   const stage = $("stage"),
@@ -190,6 +196,10 @@
     skinInfo = $("skinInfo"),
     endXp = $("endXp"),
     recordEl = $("record"),
+    arenaPrev = $("arenaPrev"),
+    arenaNext = $("arenaNext"),
+    arenaName = $("arenaName"),
+    arenaInfo = $("arenaInfo"),
     featherInfo = $("featherInfo");
   const againBtn = $("again"),
     shareBtn = $("share"),
@@ -268,25 +278,93 @@
     feather = false, // golden feather active in this run
     invuln = 0,
     bestBeaten = false;
+  let arenaUnlocked = 1, // arenas 1..arenaUnlocked can be played
+    arenaEq = 0, // arena used in the game
+    arenaIdx = 0, // arena shown in the menu
+    arenaMsg = "",
+    arenaToast = 0,
+    bests = ARENAS.map(() => 0); // record per arena
+  let flakes = [];
 
   try {
-    best = parseInt(localStorage.getItem(KEY), 10) || 0;
+    const old = parseInt(localStorage.getItem(KEY), 10) || 0;
+    const saved = JSON.parse(localStorage.getItem(KEY_BESTS) || "[]");
+    if (Array.isArray(saved))
+      bests = bests.map((_, i) => clamp(parseInt(saved[i], 10) || 0, 0, GOAL));
+    if (old > bests[0]) bests[0] = clamp(old, 0, GOAL);
+    arenaUnlocked = clamp(
+      parseInt(localStorage.getItem(KEY_ARENAS), 10) || 1,
+      1,
+      ARENAS.length,
+    );
+    arenaEq = parseInt(localStorage.getItem(KEY_ARENA), 10) || 0;
     xp = clamp(parseInt(localStorage.getItem(KEY_XP), 10) || 0, 0, MAX_XP);
     equipped = parseInt(localStorage.getItem(KEY_SKIN), 10) || 0;
   } catch (e) {}
   if (!(equipped >= 0 && equipped < SKINS.length) || SKINS[equipped].xp > xp)
     equipped = 0;
   skinIdx = equipped;
+  if (!(arenaEq >= 0 && arenaEq < arenaUnlocked)) arenaEq = 0;
   function saveBest() {
+    bests[arenaIdx] = best;
     try {
-      localStorage.setItem(KEY, String(best));
+      localStorage.setItem(KEY_BESTS, JSON.stringify(bests));
     } catch (e) {}
   }
   function saveProgress() {
     try {
       localStorage.setItem(KEY_XP, String(xp));
       localStorage.setItem(KEY_SKIN, String(equipped));
+      localStorage.setItem(KEY_ARENAS, String(arenaUnlocked));
+      localStorage.setItem(KEY_ARENA, String(arenaEq));
     } catch (e) {}
+  }
+  const isArenaUnlocked = (i) => i < arenaUnlocked;
+  function makeFlakes() {
+    const w = A.weather;
+    const n = reduce ? Math.round(w.n * 0.4) : w.n;
+    flakes = Array.from({ length: n }, (_, i) => {
+      const r = 0.7 + Math.random() * 2.3;
+      return {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r,
+        ph: Math.random() * 6.28,
+        col: w.colors[i % w.colors.length],
+        a: clamp(w.alpha[0] + r * w.alpha[1], 0, w.alpha[2]),
+      };
+    });
+  }
+  function setArena(i) {
+    arenaIdx = i;
+    A = isArenaUnlocked(i) ? ARENAS[i] : ARENAS.mystery;
+    best = bests[i];
+    makeFlakes();
+    cacheDirty = true;
+  }
+  // locked arenas can be browsed, but their background and name stay hidden
+  function changeArena(d) {
+    setArena((arenaIdx + d + ARENAS.length) % ARENAS.length);
+    if (isArenaUnlocked(arenaIdx)) {
+      arenaEq = arenaIdx;
+      saveProgress();
+    }
+    updateMenu();
+  }
+  // winning an arena unlocks the next one, and the next run starts there
+  function unlockNextArena() {
+    arenaMsg = "";
+    if (arenaIdx < ARENAS.length - 1) {
+      const n = arenaIdx + 1;
+      if (n + 1 > arenaUnlocked) {
+        arenaUnlocked = n + 1;
+        arenaMsg = "Ny arena låst opp! Hva venter?";
+      }
+      arenaEq = n;
+    } else {
+      arenaMsg = "Du har klart alle " + ARENAS.length + " arenaene!";
+    }
+    saveProgress();
   }
   function recordBest() {
     if (score > best) {
@@ -311,7 +389,11 @@
   }
   function updateMenu() {
     const sk = SKINS[skinIdx];
-    recordEl.textContent = "Din rekord er " + best + " av " + GOAL + " trær";
+    recordEl.textContent = isArenaUnlocked(arenaIdx)
+      ? "Din rekord er " + best + " av " + GOAL + " trær"
+      : "Klar " + GOAL + " trær i arena " + arenaUnlocked + " for å låse opp";
+    arenaName.textContent = A.name;
+    arenaInfo.textContent = "Arena " + (arenaIdx + 1) + " av " + ARENAS.length;
     featherInfo.textContent =
       "Nå " + FEATHER_AT + " trær: plukk gullfjæren, så tåler du ett tretreff";
     lvlEl.textContent = "Level " + xp + " av " + MAX_XP;
@@ -353,13 +435,6 @@
     r: 0.5 + rnd(i + 200) * 1.1,
     p: rnd(i + 300) * 6,
   }));
-  const flakes = Array.from({ length: reduce ? 36 : 90 }, () => ({
-    x: Math.random() * W,
-    y: Math.random() * H,
-    r: 0.7 + Math.random() * 2.3,
-    ph: Math.random() * 6.28,
-  }));
-  flakes.forEach((fl) => (fl.a = Math.min(0.85, 0.45 + fl.r * 0.12)));
   const farRidge = {
     base: 432,
     a1: 92,
@@ -379,6 +454,8 @@
     ph3: 1.5,
   };
 
+  setArena(arenaEq);
+
   /* ---- trees ---- */
   function makeTree(x) {
     const gap = GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN);
@@ -393,6 +470,7 @@
       hB = GROUND + 8 - gapBottom;
     return {
       x,
+      seed: Math.floor(Math.random() * 1000),
       gapTop,
       gapBottom,
       scored: false,
@@ -464,11 +542,16 @@
     tapEl.textContent =
       best > 0 ? "Trykk for å prøve igjen" : "Trykk for å flakse";
     skinIdx = equipped;
+    if (arenaIdx !== arenaEq) setArena(arenaEq);
+    arenaToast = 0;
     updateMenu();
   }
   function start() {
     // a locked skin can only be previewed; play with the last unlocked one
     if (!isUnlocked(skinIdx)) skinIdx = equipped;
+    if (!isArenaUnlocked(arenaIdx)) setArena(arenaEq);
+    arenaToast = 150;
+    arenaMsg = "";
     runXp = 0;
     runUnlocked = [];
     bestBeaten = false;
@@ -502,6 +585,7 @@
     state = "won";
     score = GOAL;
     recordBest();
+    unlockNextArena();
     winT = 0;
     winHold = 0;
     winStartY = eagle.y;
@@ -517,7 +601,7 @@
     endScore.textContent = String(score);
     endBest.textContent =
       kind === "won"
-        ? "Full score. Alle 100 trær."
+        ? "Full score. Alle 100 trær." + (arenaMsg ? " " + arenaMsg : "")
         : newBest && score > 0
           ? "Ny rekord!"
           : "Rekord: " + best;
@@ -581,6 +665,8 @@
       changeSkin(e.code === "ArrowLeft" ? -1 : 1);
     }
   });
+  arenaPrev.addEventListener("click", () => changeArena(-1));
+  arenaNext.addEventListener("click", () => changeArena(1));
   skinPrev.addEventListener("click", () => changeSkin(-1));
   skinNext.addEventListener("click", () => changeSkin(1));
   againBtn.addEventListener("click", restart);
@@ -624,15 +710,21 @@
     eagle.energy = Math.max(0, eagle.energy - 0.035 * f);
     eagle.phase += (0.2 + 0.45 * eagle.energy) * f;
 
+    const wt = A.weather;
     for (const fl of flakes) {
-      fl.y += (0.35 + fl.r * 0.32) * f;
+      fl.y += (wt.vy[0] + fl.r * wt.vy[1]) * f;
       fl.x +=
-        Math.sin(frame * 0.02 + fl.ph) * 0.25 * f - (0.25 + fl.r * 0.12) * f;
-      if (fl.y > H) {
+        (Math.sin(frame * 0.02 + fl.ph) * wt.sway + wt.vx[0] + fl.r * wt.vx[1]) *
+        f;
+      if (fl.y > H + 4) {
         fl.y = -4;
         fl.x = Math.random() * W;
+      } else if (fl.y < -8) {
+        fl.y = H + 4;
+        fl.x = Math.random() * W;
       }
-      if (fl.x < -4) fl.x = W + 4;
+      if (fl.x < -10) fl.x = W + 10;
+      else if (fl.x > W + 10) fl.x = -10;
     }
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
@@ -753,6 +845,7 @@
       }
     }
     if (toast > 0) toast = Math.max(0, toast - f);
+    if (arenaToast > 0) arenaToast = Math.max(0, arenaToast - f);
 
     if (eagle.y + R >= GROUND - 2) {
       die();
@@ -793,7 +886,7 @@
     draw(g);
     return c;
   }
-  function ridgeTile(p, rock, fog) {
+  function ridgeTile(p, c) {
     const top = p.base - (p.a1 + p.a2 + p.a3);
     // 800 is the pattern period; 4 extra px let neighbouring tiles overlap (no seam)
     return {
@@ -801,11 +894,11 @@
       img: makeLayer(804, GROUND - top, (g) => {
         g.translate(0, -top);
         const gr = g.createLinearGradient(0, top, 0, GROUND);
-        gr.addColorStop(0, C["--snow"]);
-        gr.addColorStop(0.2, C["--snow"]);
-        gr.addColorStop(0.27, C["--snow-shade"]);
-        gr.addColorStop(0.36, rock);
-        gr.addColorStop(1, fog);
+        gr.addColorStop(0, c.cap);
+        gr.addColorStop(0.2, c.cap);
+        gr.addColorStop(0.27, c.shade);
+        gr.addColorStop(0.36, c.rock);
+        gr.addColorStop(1, c.fog);
         g.fillStyle = gr;
         g.beginPath();
         g.moveTo(0, GROUND);
@@ -818,25 +911,33 @@
   }
   function buildCaches() {
     cacheDirty = false;
+    for (const k in grads) delete grads[k];
     skyLayer = makeLayer(W + 20, H + 20, (g) => {
       g.translate(10, 10);
       const gr = g.createLinearGradient(0, 0, 0, GROUND);
-      gr.addColorStop(0, C["--sky-hi"]);
-      gr.addColorStop(0.55, C["--sky-mid"]);
-      gr.addColorStop(1, C["--sky-low"]);
+      gr.addColorStop(0, A.sky[0]);
+      gr.addColorStop(0.55, A.sky[1]);
+      gr.addColorStop(1, A.sky[2]);
       g.fillStyle = gr;
       g.fillRect(-10, -10, W + 20, H + 20);
+      if (A.deco) {
+        g.save();
+        A.deco(g);
+        g.restore();
+      }
     });
-    glowLayer = makeLayer(W, 320, (g) => {
-      g.translate(0, -240);
-      const gl = g.createRadialGradient(320, 470, 0, 320, 470, 230);
-      gl.addColorStop(0, rgba(C["--sky-low"], 0.5));
-      gl.addColorStop(1, rgba(C["--sky-low"], 0));
-      g.fillStyle = gl;
-      g.fillRect(0, 240, W, 320);
-    });
-    farTile = ridgeTile(farRidge, C["--rock-far"], C["--mist"]);
-    nearTile = ridgeTile(nearRidge, C["--rock-near"], C["--mist"]);
+    const gw = A.glow;
+    glowLayer = gw
+      ? makeLayer(W, H, (g) => {
+          const gl = g.createRadialGradient(gw.x, gw.y, 0, gw.x, gw.y, gw.r);
+          gl.addColorStop(0, rgba(gw.color, gw.a));
+          gl.addColorStop(1, rgba(gw.color, 0));
+          g.fillStyle = gl;
+          g.fillRect(0, 0, W, H);
+        })
+      : null;
+    farTile = ridgeTile(farRidge, A.far);
+    nearTile = ridgeTile(nearRidge, A.near);
   }
   function vgrad(key, y0, y1, stops) {
     let g = grads[key];
@@ -851,22 +952,26 @@
   function drawSky() {
     ctx.drawImage(skyLayer, -10, -10, W + 20, H + 20);
 
-    ctx.fillStyle = C["--snow"];
-    for (const s of stars) {
-      ctx.globalAlpha = reduce
-        ? 0.45
-        : 0.3 + 0.3 * Math.sin(frame * 0.03 + s.p);
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, 6.283);
-      ctx.fill();
+    if (A.stars > 0) {
+      ctx.fillStyle = C["--snow"];
+      for (const s of stars) {
+        ctx.globalAlpha =
+          A.stars *
+          (reduce ? 0.45 : 0.3 + 0.3 * Math.sin(frame * 0.03 + s.p));
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, 6.283);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
 
-    const t = reduce ? 0 : frame * 0.012;
-    ribbon(70, 46, 0.011, t, C["--aurora"], 0.22);
-    ribbon(125, 36, 0.016, -t * 0.8 + 2, C["--aurora-2"], 0.12);
+    if (A.aurora) {
+      const t = reduce ? 0 : frame * 0.012;
+      ribbon(70, 46, 0.011, t, A.aurora[0], 0.22);
+      ribbon(125, 36, 0.016, -t * 0.8 + 2, A.aurora[1], 0.12);
+    }
 
-    ctx.drawImage(glowLayer, 0, 240, W, 320);
+    if (glowLayer) ctx.drawImage(glowLayer, 0, 0, W, H);
   }
   function ribbon(y0, amp, k, t, color, a) {
     const pts = [];
@@ -925,8 +1030,31 @@
     ctx.closePath();
     ctx.fill();
   }
+  function farShape(kind, x, by, h, w) {
+    if (kind === "fir") fir(x, by, h, w);
+    else if (kind === "round") {
+      ctx.beginPath();
+      ctx.ellipse(x, by - h * 0.55, w * 0.9, h * 0.45, 0, 0, 6.283);
+      ctx.fill();
+      ctx.fillRect(x - 1.5, by - h * 0.2, 3, h * 0.2);
+    } else if (kind === "cactus") {
+      ctx.fillRect(x - w * 0.25, by - h, w * 0.5, h);
+      ctx.fillRect(x - w, by - h * 0.45, w * 0.8, w * 0.35);
+      ctx.fillRect(x - w, by - h * 0.67, w * 0.35, h * 0.22 + w * 0.35);
+      ctx.fillRect(x + w * 0.2, by - h * 0.3, w * 0.8, w * 0.35);
+      ctx.fillRect(x + w * 0.65, by - h * 0.52, w * 0.35, h * 0.22 + w * 0.35);
+    } else if (kind === "spike") {
+      ctx.beginPath();
+      ctx.moveTo(x - w * 0.7, by);
+      ctx.lineTo(x - w * 0.1, by - h);
+      ctx.lineTo(x + w * 0.2, by - h * 0.55);
+      ctx.lineTo(x + w * 0.7, by);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
   function drawFarForest(off) {
-    ctx.fillStyle = C["--forest-far"];
+    ctx.fillStyle = A.forest.color;
     const N = 27,
       per = 800 / N;
     for (let i = 0; i < N; i++) {
@@ -936,41 +1064,41 @@
       const sx = (((wx - off) % 800) + 800) % 800;
       for (const x of [sx, sx - 800]) {
         if (x < -30 || x > W + 30) continue;
-        fir(x, GROUND - 2, hgt, wd);
+        farShape(A.forest.kind, x, GROUND - 2, hgt, wd);
       }
     }
   }
 
-  function spruce(cx, tipY, baseY, w, snowy) {
+  function spruce(cx, tipY, baseY, w, snowy, ob) {
     const h = baseY - tipY,
       trunkH = Math.min(26, h * 0.12),
       body = h - trunkH;
-    ctx.fillStyle = C["--trunk"];
+    ctx.fillStyle = ob.trunk;
     ctx.fillRect(cx - 5, baseY - trunkH - 6, 10, trunkH + 12);
     const n = Math.max(3, Math.min(7, Math.round(body / 46)));
     for (let i = 0; i < n; i++) {
       const ya = tipY + body * (i / (n + 0.35));
       const yb = tipY + body * ((i + 1.35) / (n + 0.35));
       const hwb = (((yb - tipY) / body) * w) / 2;
-      ctx.fillStyle = C["--spruce"];
+      ctx.fillStyle = ob.body;
       ctx.beginPath();
       ctx.moveTo(cx, ya);
       ctx.lineTo(cx + hwb, yb);
       ctx.quadraticCurveTo(cx, yb - 7, cx - hwb, yb);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = rgba(C["--spruce-dark"], 0.55);
+      ctx.fillStyle = rgba(ob.dark, 0.55);
       ctx.beginPath();
       ctx.moveTo(cx, ya);
       ctx.lineTo(cx + hwb, yb);
       ctx.quadraticCurveTo(cx + hwb * 0.5, yb - 5, cx, yb - 3.5);
       ctx.closePath();
       ctx.fill();
-      if (snowy) {
+      if (snowy && ob.snow) {
         const f = 0.52,
           yy = ya + (yb - ya) * f,
           sx = hwb * f;
-        ctx.fillStyle = C["--snow"];
+        ctx.fillStyle = ob.snow;
         ctx.beginPath();
         ctx.moveTo(cx, ya - 1);
         ctx.lineTo(cx + sx, yy);
@@ -980,6 +1108,111 @@
         ctx.fill();
       }
     }
+  }
+  // leafy tree built from stacked blobs, same cone shape as the hitbox
+  function blobTree(cx, tipY, baseY, w, ob) {
+    const h = baseY - tipY,
+      trunkH = Math.min(26, h * 0.12),
+      body = h - trunkH;
+    if (ob.trunk) {
+      ctx.fillStyle = ob.trunk;
+      ctx.fillRect(cx - 5, baseY - trunkH - 6, 10, trunkH + 12);
+    }
+    const n = Math.max(4, Math.min(16, Math.round(body / 22)));
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.8) / (n + 0.2);
+      const y = tipY + body * t,
+        hw = (w / 2) * t,
+        r = Math.max(12, hw * 0.5, (body / n) * 0.62);
+      const xs = hw < 16 ? [0] : [-hw * 0.5, 0, hw * 0.5];
+      ctx.fillStyle = ob.dark;
+      for (const dx of xs) {
+        ctx.beginPath();
+        ctx.arc(cx + dx + 2, y + 3, r, 0, 6.283);
+        ctx.fill();
+      }
+      ctx.fillStyle = ob.body;
+      for (const dx of xs) {
+        ctx.beginPath();
+        ctx.arc(cx + dx, y, r, 0, 6.283);
+        ctx.fill();
+      }
+      ctx.fillStyle = ob.light;
+      for (const dx of xs) {
+        ctx.beginPath();
+        ctx.arc(cx + dx - r * 0.3, y - r * 0.35, r * 0.34, 0, 6.283);
+        ctx.fill();
+      }
+    }
+  }
+  // rock spire / crystal: two facets, optional bands, cap and glowing edge
+  function spireTree(cx, tipY, baseY, w, ob, seed) {
+    const h = baseY - tipY,
+      hw = (w / 2) * 0.92;
+    const L = [],
+      Rr = [];
+    for (let k = 1; k <= 3; k++) {
+      const f = k / 4;
+      const y = tipY + h * f;
+      L.push([cx - hw * f * (1 + (rnd(seed + k) - 0.5) * 0.25), y]);
+      Rr.push([cx + hw * f * (1 + (rnd(seed + k + 9) - 0.5) * 0.25), y]);
+    }
+    const ridgeX = cx + hw * 0.12;
+    poly([[cx, tipY], ...L, [cx - hw, baseY], [ridgeX, baseY]], ob.body);
+    poly([[cx, tipY], ...Rr, [cx + hw, baseY], [ridgeX, baseY]], ob.dark);
+    if (ob.bands) {
+      ctx.strokeStyle = ob.bands;
+      ctx.lineWidth = 3;
+      for (const f of [0.35, 0.55, 0.75]) {
+        ctx.beginPath();
+        ctx.moveTo(cx - hw * f * 0.9, tipY + h * f);
+        ctx.lineTo(cx + hw * f * 0.9, tipY + h * f);
+        ctx.stroke();
+      }
+    }
+    ctx.strokeStyle = ob.light;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, tipY + 2);
+    ctx.lineTo(L[1][0] + 2, L[1][1]);
+    ctx.stroke();
+    if (ob.cap)
+      poly(
+        [
+          [cx, tipY],
+          [cx - hw * 0.2, tipY + h * 0.2],
+          [cx - hw * 0.05, tipY + h * 0.16],
+          [cx + hw * 0.08, tipY + h * 0.22],
+          [cx + hw * 0.2, tipY + h * 0.2],
+        ],
+        ob.cap,
+      );
+    if (ob.glow) {
+      ctx.lineCap = "round";
+      ctx.strokeStyle = rgba(ob.glow, 0.3);
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(cx, tipY + 4);
+      ctx.lineTo(ridgeX, baseY);
+      ctx.stroke();
+      ctx.strokeStyle = rgba(ob.glow, 0.9);
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+  }
+  function poly(pts, col) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+  function drawObstacle(cx, tipY, baseY, w, snowy, seed) {
+    const ob = A.ob;
+    if (ob.kind === "blob") blobTree(cx, tipY, baseY, w, ob);
+    else if (ob.kind === "spire") spireTree(cx, tipY, baseY, w, ob, seed);
+    else spruce(cx, tipY, baseY, w, snowy, ob);
   }
   function drawTrees() {
     for (const t of trees) {
@@ -998,17 +1231,18 @@
         ctx.fill();
         drawFeather(t.x, fy, 1.5);
       }
-      spruce(t.x, t.gapBottom, GROUND + 8, t.wB, true);
+      drawObstacle(t.x, t.gapBottom, GROUND + 8, t.wB, true, t.seed);
       ctx.save();
       ctx.scale(1, -1);
-      spruce(t.x, -t.gapTop, 30, t.wT, false);
+      drawObstacle(t.x, -t.gapTop, 30, t.wT, false, t.seed + 3);
       ctx.restore();
     }
   }
 
   function drawGround() {
     const off = scroll;
-    ctx.fillStyle = C["--snow"];
+    const gd = A.ground;
+    ctx.fillStyle = gd.top;
     ctx.beginPath();
     ctx.moveTo(-10, H + 10);
     for (let x = -10; x <= W + 10; x += 5) {
@@ -1024,12 +1258,12 @@
     ctx.fill();
 
     ctx.fillStyle = vgrad("gshade", GROUND, H, [
-      [0, rgba(C["--snow-shade"], 0)],
-      [1, rgba(C["--snow-shade"], 0.9)],
+      [0, rgba(gd.shade, 0)],
+      [1, rgba(gd.shade, 0.9)],
     ]);
     ctx.fillRect(-10, GROUND, W + 20, H - GROUND + 10);
 
-    ctx.fillStyle = rgba(C["--snow"], 0.7);
+    ctx.fillStyle = gd.near;
     ctx.beginPath();
     ctx.moveTo(-10, H + 10);
     for (let x = -10; x <= W + 10; x += 5) {
@@ -1045,7 +1279,8 @@
     ctx.closePath();
     ctx.fill();
 
-    ctx.strokeStyle = C["--reed"];
+    ctx.strokeStyle = gd.tuft;
+    ctx.fillStyle = gd.tuft;
     ctx.lineWidth = 1.4;
     ctx.lineCap = "round";
     for (let k = 0; k < 5; k++) {
@@ -1055,24 +1290,50 @@
       for (const x of [sx, sx + 360]) {
         if (x > W + 10) continue;
         ctx.beginPath();
-        ctx.moveTo(x, by);
-        ctx.lineTo(x - 2, by - 9);
-        ctx.moveTo(x, by);
-        ctx.lineTo(x + 1, by - 12);
-        ctx.moveTo(x, by);
-        ctx.lineTo(x + 4, by - 8);
-        ctx.stroke();
+        if (gd.kind === "wave") {
+          ctx.arc(x, by, 7, Math.PI * 1.1, Math.PI * 1.9);
+          ctx.stroke();
+        } else if (gd.kind === "rock") {
+          ctx.ellipse(x, by - 2, 3.4, 2.2, 0, 0, 6.283);
+          ctx.fill();
+        } else {
+          ctx.moveTo(x, by);
+          ctx.lineTo(x - 2, by - 9);
+          ctx.moveTo(x, by);
+          ctx.lineTo(x + 1, by - 12);
+          ctx.moveTo(x, by);
+          ctx.lineTo(x + 4, by - 8);
+          ctx.stroke();
+        }
       }
     }
   }
 
   function drawFlakes() {
-    ctx.fillStyle = C["--snow"];
+    const wt = A.weather;
     for (const fl of flakes) {
       ctx.globalAlpha = fl.a;
-      ctx.beginPath();
-      ctx.arc(fl.x, fl.y, fl.r, 0, 6.283);
-      ctx.fill();
+      if (wt.shape === "streak") {
+        ctx.strokeStyle = fl.col;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(
+          fl.x - (wt.vx[0] + fl.r * wt.vx[1]) * 2.5,
+          fl.y - (wt.vy[0] + fl.r * wt.vy[1]) * 2.5,
+        );
+        ctx.lineTo(fl.x, fl.y);
+        ctx.stroke();
+      } else if (wt.shape === "leaf") {
+        ctx.fillStyle = fl.col;
+        ctx.beginPath();
+        ctx.ellipse(fl.x, fl.y, fl.r * 1.8, fl.r, fl.ph + frame * 0.04, 0, 6.283);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = fl.col;
+        ctx.beginPath();
+        ctx.arc(fl.x, fl.y, fl.r, 0, 6.283);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -1255,6 +1516,21 @@
 
   function drawScore() {
     if (state === "ready") return;
+    if (arenaToast > 0 && state === "play") {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, arenaToast / 30);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.font = '800 16px "Nunito Sans", system-ui, sans-serif';
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = rgba(C["--night"], 0.7);
+      const txt = "Arena " + (arenaIdx + 1) + ": " + A.name;
+      ctx.strokeText(txt, W / 2, 180);
+      ctx.fillStyle = C["--snow"];
+      ctx.fillText(txt, W / 2, 180);
+      ctx.restore();
+    }
     if (toast > 0 && state === "play") {
       ctx.save();
       ctx.globalAlpha = Math.min(1, toast / 30);
@@ -1318,8 +1594,8 @@
     drawRidge(farTile, (scroll * 0.08) % 800);
     drawRidge(nearTile, (scroll * 0.2) % 800);
     ctx.fillStyle = vgrad("mist", 420, GROUND, [
-      [0, rgba(C["--mist"], 0)],
-      [1, rgba(C["--mist"], 0.6)],
+      [0, rgba(A.mist, 0)],
+      [1, rgba(A.mist, 0.6)],
     ]);
     ctx.fillRect(-10, 420, W + 20, GROUND - 420);
     drawFarForest((scroll * 0.5) % 800);

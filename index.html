@@ -41,6 +41,28 @@
             <div class="picker">
               <button
                 class="arrow"
+                id="arenaPrev"
+                type="button"
+                aria-label="Forrige arena"
+              >
+                &#8249;
+              </button>
+              <div class="skinname" aria-live="polite">
+                <strong id="arenaName"></strong>
+                <small id="arenaInfo"></small>
+              </div>
+              <button
+                class="arrow"
+                id="arenaNext"
+                type="button"
+                aria-label="Neste arena"
+              >
+                &#8250;
+              </button>
+            </div>
+            <div class="picker">
+              <button
+                class="arrow"
                 id="skinPrev"
                 type="button"
                 aria-label="Forrige skin"
@@ -96,6 +118,7 @@
       </div>
     </div>
 
+    <script src="arenas.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

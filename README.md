@@ -15,13 +15,19 @@ Et Flappy Bird-inspirert spill der en norsk havørn flyr gjennom snødekt gransk
 - Med XP låser du opp nye skins til ørnen: Havørn (0), Kongeørn (20), Snøørn (40), Nattørn (70), Nordlysørn (100), Ildørn (140) og Gullørn (200).
 - Velg skin på startskjermen (der det står «Trykk for å flakse») med pilknappene eller venstre/høyre piltast. Låste skins vises som silhuett.
 
+## Arenaer
+
+Det er 10 arenaer, hver med egen bakgrunn, vær og egne hindringer. Hva som venter er en overraskelse: låste arenaer vises som «???» med mørk bakgrunn til du har klart 100 trær i arenaen før.
+
+Når du klarer 100 trær i en arena, låses neste arena opp, og neste runde starter der. På startmenyen kan du bla mellom alle arenaene med pilknappene over skin-valget, men bare de du har låst opp kan spilles. Rekorden lagres per arena. Alle arenaene er definert i `arenas.js`.
+
 ## Gullfjær
 
 Når du har passert 40 trær i en runde, dukker det opp en gullfjær midt i åpningen mellom to trær. Flyr du borti den, kan du treffe ett tre uten å dø. Fjæren brukes opp, og ørnen blinker en liten stund så den kommer seg ut av treet. Treffer du et tre til, eller bakken, er spillet over. Mens fjæren er aktiv, står det «Gullfjær» under scoren, og ørnen har en gylden glød. Fjæren kommer én gang per runde (`FEATHER_AT`).
 
 ## Rekord
 
-Startmenyen viser alltid «Din rekord er X av 100 trær», så du ser hvor nær målet du var sist. Rekorden lagres med en gang du dør eller vinner.
+Startmenyen viser alltid «Din rekord er X av 100 trær» for arenaen du står i, så du ser hvor nær målet du var sist. Rekorden lagres med en gang du dør eller vinner.
 
 XP, valgt skin og rekorden din lagres i nettleseren (localStorage).
 
@@ -30,20 +36,21 @@ XP, valgt skin og rekorden din lagres i nettleseren (localStorage).
 1. Last ned mappen med filene under.
 2. Åpne `index.html` i Chrome (dobbeltklikk, eller dra filen inn i et nettleservindu).
 
-Filene må ligge i samme mappe.
+Filene må ligge i samme mappe. Husk å ta med `arenas.js`.
 
 | Fil          | Innhold                                        |
 | ------------ | ---------------------------------------------- |
 | `index.html` | Sidens struktur og panelene for start og slutt |
 | `style.css`  | Farger, typografi og layout                    |
 | `script.js`  | Hele spillet: fysikk, tegning og logikk        |
+| `arenas.js`  | De 10 arenaene: farger, bakgrunn, vær og trær  |
 
 Skrifttypene (Fjalla One og Nunito Sans) hentes fra Google Fonts, så du trenger nett første gang. Uten nett brukes reserveskrifter, og spillet fungerer likevel.
 
 ## Del spillet
 
 - **Send mappen** som zip, så kan mottakeren åpne `index.html`.
-- **Legg det på nett** ved å laste opp de tre filene til en gratis tjeneste som GitHub Pages, Netlify eller Cloudflare Pages. Da får du en lenke du kan sende.
+- **Legg det på nett** ved å laste opp filene til en gratis tjeneste som GitHub Pages, Netlify eller Cloudflare Pages. Da får du en lenke du kan sende.
 
 Knappen «Del score» kopierer en ferdig tekst til utklippstavlen. Hvis nettleseren ikke tillater kopiering (kan skje når filen åpnes direkte fra disk), vises teksten i et felt du kan merke og kopiere selv.
 

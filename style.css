@@ -115,7 +115,7 @@ canvas {
 .intro .tap {
   position: absolute;
   left: 50%;
-  top: 59%;
+  top: 60%;
   transform: translateX(-50%);
   white-space: nowrap;
   font-weight: 800;
@@ -129,14 +129,14 @@ canvas {
 .skins {
   position: absolute;
   left: 50%;
-  top: 68%;
+  top: 69%;
   transform: translateX(-50%);
   width: 86%;
-  padding: 0.7em 0.8em;
+  padding: 0.6em 0.8em;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4em;
+  gap: 0.45em;
   border-radius: 14px;
   background: rgba(14, 32, 54, 0.62);
   border: 1px solid rgba(245, 249, 252, 0.2);
@@ -194,7 +194,7 @@ canvas {
   width: 2em;
   height: 2em;
   padding: 0;
-  font: 800 1.4em/1 var(--font-body);
+  font: 800 1.2em/1 var(--font-body);
   color: var(--ink);
   background: rgba(245, 249, 252, 0.12);
   border: 1px solid rgba(245, 249, 252, 0.35);
