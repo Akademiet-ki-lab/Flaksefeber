@@ -123,11 +123,11 @@ window.makeArenas = function (C, rgba) {
         alpha: [0.5, 0.1, 0.9],
       },
       ob: {
-        kind: "blob",
-        body: "#4fae4a",
-        dark: "#2f7d33",
-        light: "#7ed26a",
-        trunk: "#6b4a2b",
+        kind: "fir",
+        body: "#2f8a3c",
+        dark: "#124a1f",
+        trunk: "#5a3d26",
+        snow: null,
       },
     },
 
