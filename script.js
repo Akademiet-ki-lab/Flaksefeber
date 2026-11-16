@@ -284,7 +284,8 @@
     arenaMsg = "",
     arenaToast = 0,
     bests = ARENAS.map(() => 0); // record per arena
-  let flakes = [];
+  let flakes = [],
+    vines = []; // random hanging lianas in the background (rainforest)
 
   try {
     const old = parseInt(localStorage.getItem(KEY), 10) || 0;
@@ -335,11 +336,28 @@
       };
     });
   }
+  function makeVines() {
+    vines = [];
+    if (!A.vines) return;
+    const n = reduce ? 6 : 10;
+    for (let i = 0; i < n; i++)
+      vines.push({
+        x: Math.random() * 800,
+        len: 50 + Math.random() * 150,
+        lean: (Math.random() - 0.5) * 30,
+        w: 1.6 + Math.random() * 1.6,
+        leaves: 3 + Math.floor(Math.random() * 4),
+        ph: Math.random() * 6.28,
+        z: 0.2 + Math.random() * 0.25, // parallax speed
+        shade: Math.random() < 0.5,
+      });
+  }
   function setArena(i) {
     arenaIdx = i;
     A = isArenaUnlocked(i) ? ARENAS[i] : ARENAS.mystery;
     best = bests[i];
     makeFlakes();
+    makeVines();
     cacheDirty = true;
   }
   // locked arenas can be browsed, but their background and name stay hidden
@@ -552,6 +570,7 @@
     if (!isArenaUnlocked(arenaIdx)) setArena(arenaEq);
     arenaToast = 150;
     arenaMsg = "";
+    makeVines(); // new random lianas every run
     runXp = 0;
     runUnlocked = [];
     bestBeaten = false;
@@ -1069,6 +1088,37 @@
     }
   }
 
+  function drawVines() {
+    for (const v of vines) {
+      const sx = (((v.x - scroll * v.z) % 800) + 800) % 800;
+      for (const x of [sx, sx - 800]) {
+        if (x < -30 || x > W + 30) continue;
+        const sw = Math.sin(frame * 0.03 + v.ph) * 4;
+        ctx.strokeStyle = v.shade ? "#25672f" : "#2f7a3a";
+        ctx.lineWidth = v.w;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x, -5);
+        ctx.quadraticCurveTo(x + v.lean + sw, v.len / 2, x + sw * 0.6, v.len);
+        ctx.stroke();
+        ctx.fillStyle = v.shade ? "#348a3c" : "#3f9a48";
+        for (let k = 1; k <= v.leaves; k++) {
+          const t = k / (v.leaves + 0.6);
+          ctx.beginPath();
+          ctx.ellipse(
+            x + (v.lean + sw) * t * (1 - t) * 2 + sw * 0.6 * t * t + (k % 2 ? 6 : -6),
+            v.len * t,
+            6,
+            2.6,
+            k % 2 ? 0.5 : -0.5,
+            0,
+            6.283,
+          );
+          ctx.fill();
+        }
+      }
+    }
+  }
   function spruce(cx, tipY, baseY, w, snowy, ob) {
     const h = baseY - tipY,
       trunkH = Math.min(26, h * 0.12),
@@ -1208,6 +1258,209 @@
     ctx.closePath();
     ctx.fill();
   }
+  /* ---- rainforest critters (decoration only, no hitbox) ---- */
+  function monkey(x, y, sc, dir, hang) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(dir * sc, sc);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#5e361b";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-6, -5);
+    if (hang) ctx.quadraticCurveTo(-16, 2, -12, 11);
+    else ctx.bezierCurveTo(-18, -4, -20, -21, -12, -21);
+    ctx.stroke();
+    if (hang) {
+      ctx.strokeStyle = "#7a4a2a";
+      ctx.lineWidth = 3.4;
+      ctx.beginPath();
+      ctx.moveTo(-3, -15);
+      ctx.lineTo(-1, -33);
+      ctx.moveTo(5, -15);
+      ctx.lineTo(2, -33);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#7a4a2a";
+    ctx.beginPath();
+    ctx.ellipse(0, -9, 8, 9, 0, 0, 6.283);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(-4, -1, 4, 2.6, 0, 0, 6.283);
+    ctx.ellipse(5, -1, 4, 2.6, 0, 0, 6.283);
+    ctx.fill();
+    ctx.fillStyle = "#dcb98e";
+    ctx.beginPath();
+    ctx.ellipse(1.5, -8, 4.5, 6, 0, 0, 6.283);
+    ctx.fill();
+    ctx.fillStyle = "#7a4a2a";
+    ctx.beginPath();
+    ctx.arc(2, -22, 7.2, 0, 6.283);
+    ctx.arc(-5, -22.5, 3.2, 0, 6.283);
+    ctx.arc(9, -22.5, 3.2, 0, 6.283);
+    ctx.fill();
+    ctx.fillStyle = "#e8c9a0";
+    ctx.beginPath();
+    ctx.arc(-5, -22.5, 1.7, 0, 6.283);
+    ctx.arc(9, -22.5, 1.7, 0, 6.283);
+    ctx.ellipse(4, -21, 5.2, 4.6, 0, 0, 6.283);
+    ctx.fill();
+    ctx.fillStyle = "#1a120b";
+    ctx.beginPath();
+    ctx.arc(2.6, -23, 1, 0, 6.283);
+    ctx.arc(6.6, -23, 1, 0, 6.283);
+    ctx.fill();
+    ctx.strokeStyle = "#7a4a2a";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(4.6, -20.2, 1.9, 0.3, 2.8);
+    ctx.stroke();
+    if (hang) {
+      ctx.fillStyle = "#7a4a2a";
+      ctx.beginPath();
+      ctx.arc(-1, -33, 2.2, 0, 6.283);
+      ctx.arc(2, -33, 2.2, 0, 6.283);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  function snakeAt(x0, y0, dx, dy, amp, waves, w) {
+    const n = 20,
+      ph = frame * 0.05,
+      pts = [];
+    // dx, dy = direction of travel; the wave is sideways to that
+    const len = Math.hypot(dx, dy),
+      ux = dx / len,
+      uy = dy / len;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n,
+        o = amp * Math.sin(t * waves * 6.283 + ph);
+      pts.push([x0 + dx * t - uy * o, y0 + dy * t + ux * o]);
+    }
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke();
+    };
+    ctx.strokeStyle = "#1f5a16";
+    ctx.lineWidth = w + 2.4;
+    path();
+    ctx.strokeStyle = "#58c23a";
+    ctx.lineWidth = w;
+    path();
+    ctx.strokeStyle = "#f1d545";
+    ctx.lineWidth = w * 0.45;
+    ctx.setLineDash([2.5, 5]);
+    path();
+    ctx.setLineDash([]);
+    // head, eyes and tongue
+    const a = pts[n],
+      b = pts[n - 1];
+    const ang = Math.atan2(a[1] - b[1], a[0] - b[0]);
+    ctx.save();
+    ctx.translate(a[0], a[1]);
+    ctx.rotate(ang);
+    ctx.strokeStyle = "#d6403a";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.9, 0);
+    ctx.lineTo(w * 1.9, 0);
+    ctx.lineTo(w * 2.4, -1.8);
+    ctx.moveTo(w * 1.9, 0);
+    ctx.lineTo(w * 2.4, 1.8);
+    ctx.stroke();
+    ctx.fillStyle = "#58c23a";
+    ctx.beginPath();
+    ctx.ellipse(w * 0.2, 0, w * 1.1, w * 0.85, 0, 0, 6.283);
+    ctx.fill();
+    ctx.fillStyle = "#fff6a8";
+    ctx.beginPath();
+    ctx.arc(w * 0.4, -w * 0.4, w * 0.3, 0, 6.283);
+    ctx.arc(w * 0.4, w * 0.4, w * 0.3, 0, 6.283);
+    ctx.fill();
+    ctx.fillStyle = "#1a120b";
+    ctx.beginPath();
+    ctx.arc(w * 0.45, -w * 0.4, w * 0.14, 0, 6.283);
+    ctx.arc(w * 0.45, w * 0.4, w * 0.14, 0, 6.283);
+    ctx.fill();
+    ctx.restore();
+  }
+  function vine(ax, ay, len) {
+    const sw = Math.sin(frame * 0.04 + ax) * 3;
+    ctx.strokeStyle = "#3f8a3a";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.quadraticCurveTo(ax + sw, ay + len / 2, ax + sw * 0.5, ay + len);
+    ctx.stroke();
+    ctx.fillStyle = "#4fb04a";
+    for (let k = 1; k <= 3; k++) {
+      ctx.beginPath();
+      ctx.ellipse(
+        ax + sw * 0.5 * (k / 3) + (k % 2 ? 4 : -4),
+        ay + (len * k) / 3.4,
+        4.5,
+        2,
+        k % 2 ? 0.5 : -0.5,
+        0,
+        6.283,
+      );
+      ctx.fill();
+    }
+  }
+  function drawCritters(t) {
+    const sd = t.seed,
+      cx = t.x;
+    const side = sd % 2 ? 1 : -1;
+    // tree growing from the ground
+    {
+      const tipY = t.gapBottom,
+        base = GROUND + 8,
+        h = base - tipY,
+        w = t.wB,
+        kind = sd % 3;
+      if (kind === 0) {
+        const f = 0.3,
+          hx = cx + side * (w / 2) * f * 0.85 + side * 4,
+          hy = tipY + h * f + 3;
+        ctx.strokeStyle = "#5a3d26";
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(hx - 12, hy);
+        ctx.lineTo(hx + 12, hy);
+        ctx.stroke();
+        monkey(hx, hy, 1, side, false);
+      } else if (kind === 1) {
+        snakeAt(cx - side * 6, base - 6, 0, -(h * 0.55), 9, 3, 4.5);
+      }
+    }
+    // tree hanging from the top
+    {
+      const tipY = t.gapTop,
+        hT = tipY + 30,
+        w = t.wT,
+        kind = (sd + 1) % 3,
+        f = 0.5,
+        ax = cx - side * (w / 2) * f * 0.8,
+        ay = tipY - hT * f,
+        space = tipY + 4 - ay;
+      if (kind === 0 && space >= 40) {
+        snakeAt(ax, ay, 0, Math.min(46, space), 3.5, 1.2, 4.5);
+      } else if (kind === 1 && space >= 44) {
+        const L = Math.min(30, space - 34);
+        vine(ax, ay, L);
+        monkey(ax, ay + L + 34, 1, -side, true);
+      } else if (kind === 2 && space >= 20) {
+        vine(ax, ay, Math.min(55, space));
+      }
+    }
+  }
   function drawObstacle(cx, tipY, baseY, w, snowy, seed) {
     const ob = A.ob;
     if (ob.kind === "blob") blobTree(cx, tipY, baseY, w, ob);
@@ -1236,6 +1489,7 @@
       ctx.scale(1, -1);
       drawObstacle(t.x, -t.gapTop, 30, t.wT, false, t.seed + 3);
       ctx.restore();
+      if (A.ob.critters) drawCritters(t);
     }
   }
 
@@ -1599,6 +1853,7 @@
     ]);
     ctx.fillRect(-10, 420, W + 20, GROUND - 420);
     drawFarForest((scroll * 0.5) % 800);
+    if (vines.length) drawVines();
     drawTrees();
     drawGround();
     drawFlakes();

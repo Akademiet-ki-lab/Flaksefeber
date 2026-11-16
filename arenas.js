@@ -181,6 +181,7 @@ window.makeArenas = function (C, rgba) {
       stars: 0,
       aurora: null,
       glow: { x: 200, y: 300, r: 300, color: "#d6f0c8", a: 0.35 },
+      vines: true, // lianas placed at random in the background
       deco(g) {
         disc(g, 260, 140, 36, "#e8f5c0", 110, 0.35);
         cloud(g, 20, 70, 1.3, "#2b4a40", 0.8);
@@ -208,11 +209,12 @@ window.makeArenas = function (C, rgba) {
         alpha: [0.35, 0.1, 0.65],
       },
       ob: {
-        kind: "blob",
-        body: "#1f6b3a",
-        dark: "#0f3f22",
-        light: "#4fa85c",
+        kind: "fir",
+        body: "#238a45",
+        dark: "#0a3a1f",
         trunk: "#4a3526",
+        snow: null,
+        critters: true, // monkeys, snakes and vines on the trees
       },
     },
 
