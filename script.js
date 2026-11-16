@@ -1,30 +1,29 @@
 (() => {
   "use strict";
 
-  const W = 400,
-    H = 640,
-    GROUND = 552;
-  const GAP_MIN = 126,
-    GAP_MAX = 146,
-    SPACING = 215,
-    GOAL = 100,
-    BASE_SPEED = 2.4,
-    STEP_EVERY = 20,
-    STEP_BOOST = 0.4;
-  const GRAV = 0.38,
-    FLAP = -6.9,
-    MAXFALL = 9.5,
-    R = 11;
-  const KEY = "orneflukt-best", // old single record (migrated to arena 1)
-    KEY_BESTS = "orneflukt-bests",
-    KEY_ARENAS = "orneflukt-arenas", // how many arenas are unlocked
-    KEY_ARENA = "orneflukt-arena", // chosen arena
-    KEY_XP = "orneflukt-xp",
-    KEY_SKIN = "orneflukt-skin";
-  const MAX_XP = 200, // max level; level = total XP
-    TREES_PER_XP = 10, // 1 XP for every 10th tree
-    FEATHER_AT = 40, // a golden feather appears after this many trees in a run
-    INVULN = 75; // frames of protection after the feather is used
+  // game rules come from the shared simulation (sim.js), which the server
+  // also uses to replay and verify every run
+  const {
+    W,
+    H,
+    GROUND,
+    GOAL,
+    GRAV,
+    R,
+    MAX_XP, // max level; level = total XP
+    TREES_PER_XP, // 1 XP for every 10th tree
+    FEATHER_AT, // a golden feather appears after this many trees in a run
+  } = Sim.CONST;
+  const KEY_AUTH = "orneflukt-auth"; // Supabase session (anonymous player)
+  const LEGACY_KEYS = [
+    "orneflukt-best",
+    "orneflukt-bests",
+    "orneflukt-arenas",
+    "orneflukt-arena",
+    "orneflukt-xp",
+    "orneflukt-skin",
+    "orneflukt-sig",
+  ];
   const reduce = !!(
     window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches
   );
@@ -253,8 +252,7 @@
   let score = 0,
     best = 0;
   let scroll = 0,
-    frame = 0,
-    curSpeed = BASE_SPEED;
+    frame = 0;
   let trees = [],
     particles = [];
   let shake = 0,
@@ -264,17 +262,21 @@
     winT = 0,
     winHold = 0,
     winStartY = 290;
-  let lastGapTop = 170,
-    endShown = false,
+  let sim = null, // the running simulation (sim.js)
+    run = null, // {runToken, inputs, frames} for the server to verify
+    acc = 0, // steps owed to the simulation (it runs at a fixed 60 per second)
+    flapQueued = false,
+    starting = false,
+    endWaiting = false,
+    sessionP = null;
+  let endShown = false,
     endAt = 0;
   let xp = 0,
     equipped = 0, // skin used in the game
     skinIdx = 0, // skin shown in the menu
     runXp = 0,
     runUnlocked = [];
-  let featherDue = false, // spawn the pickup on the next tree
-    featherSpawned = false,
-    toast = 0, // frames left of the "feather picked up" message
+  let toast = 0, // frames left of the "feather picked up" message
     feather = false, // golden feather active in this run
     invuln = 0,
     bestBeaten = false;
@@ -287,38 +289,127 @@
   let flakes = [],
     vines = []; // random hanging lianas in the background (rainforest)
 
-  try {
-    const old = parseInt(localStorage.getItem(KEY), 10) || 0;
-    const saved = JSON.parse(localStorage.getItem(KEY_BESTS) || "[]");
-    if (Array.isArray(saved))
-      bests = bests.map((_, i) => clamp(parseInt(saved[i], 10) || 0, 0, GOAL));
-    if (old > bests[0]) bests[0] = clamp(old, 0, GOAL);
-    arenaUnlocked = clamp(
-      parseInt(localStorage.getItem(KEY_ARENAS), 10) || 1,
-      1,
-      ARENAS.length,
-    );
-    arenaEq = parseInt(localStorage.getItem(KEY_ARENA), 10) || 0;
-    xp = clamp(parseInt(localStorage.getItem(KEY_XP), 10) || 0, 0, MAX_XP);
-    equipped = parseInt(localStorage.getItem(KEY_SKIN), 10) || 0;
-  } catch (e) {}
-  if (!(equipped >= 0 && equipped < SKINS.length) || SKINS[equipped].xp > xp)
-    equipped = 0;
-  skinIdx = equipped;
-  if (!(arenaEq >= 0 && arenaEq < arenaUnlocked)) arenaEq = 0;
-  function saveBest() {
-    bests[arenaIdx] = best;
+  /* ---- progress lives on the server (Supabase) ----
+     The player is an anonymous Supabase user. Progress sits in a database the
+     browser can't write to. Every run is sent to the Edge Function `game`,
+     which replays it and decides score, XP and unlocks. Editing localStorage
+     only breaks the login, and a broken login gives a fresh player. */
+  const CFG = window.ORN_CONFIG || {};
+  let online = false, // false = no server: the game can be played, nothing is saved
+    saveNote = "", // shown on the end screen when something couldn't be saved
+    finishing = null; // promise while the server verifies the last run
+  let chain = Promise.resolve(); // all server calls run one after another
+  const enqueue = (fn) => (chain = chain.then(fn, fn));
+
+  const authHeaders = (extra) =>
+    Object.assign({ "Content-Type": "application/json", apikey: CFG.key }, extra);
+  let authP = null;
+  function readAuth() {
     try {
-      localStorage.setItem(KEY_BESTS, JSON.stringify(bests));
+      const a = JSON.parse(localStorage.getItem(KEY_AUTH));
+      if (a && typeof a.access_token === "string" && a.refresh_token) return a;
     } catch (e) {}
+    return null;
   }
-  function saveProgress() {
+  function saveAuth(a) {
+    const keep = {
+      access_token: a.access_token,
+      refresh_token: a.refresh_token,
+      expires_at: a.expires_at || Math.floor(Date.now() / 1000) + a.expires_in,
+    };
     try {
-      localStorage.setItem(KEY_XP, String(xp));
-      localStorage.setItem(KEY_SKIN, String(equipped));
-      localStorage.setItem(KEY_ARENAS, String(arenaUnlocked));
-      localStorage.setItem(KEY_ARENA, String(arenaEq));
+      localStorage.setItem(KEY_AUTH, JSON.stringify(keep));
     } catch (e) {}
+    return keep;
+  }
+  async function authCall(path, body) {
+    const r = await fetch(CFG.url + "/auth/v1/" + path, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error("auth " + r.status);
+    return r.json();
+  }
+  // a valid access token: reuse, refresh, or sign in as a new anonymous player
+  function accessToken() {
+    if (!authP)
+      authP = (async () => {
+        let a = readAuth();
+        const now = Math.floor(Date.now() / 1000);
+        if (a && a.expires_at - 60 > now) return a.access_token;
+        if (a) {
+          try {
+            return saveAuth(
+              await authCall("token?grant_type=refresh_token", {
+                refresh_token: a.refresh_token,
+              }),
+            ).access_token;
+          } catch (e) {}
+        }
+        return saveAuth(await authCall("signup", { data: {} })).access_token;
+      })().finally(() => (authP = null));
+    return authP;
+  }
+  async function post(action, body) {
+    const jwt = await accessToken();
+    const r = await fetch(CFG.url + "/functions/v1/game", {
+      method: "POST",
+      headers: authHeaders({ Authorization: "Bearer " + jwt }),
+      body: JSON.stringify(Object.assign({ action }, body)),
+      cache: "no-store",
+    });
+    let data = null;
+    try {
+      data = await r.json();
+    } catch (e) {}
+    if (r.status === 401) {
+      // login no longer valid: forget it, the next call starts a new player
+      try {
+        localStorage.removeItem(KEY_AUTH);
+      } catch (e) {}
+    }
+    return { status: r.status, data };
+  }
+  function applyProgress(p) {
+    bests = ARENAS.map((_, i) => clamp(parseInt(p.bests[i], 10) || 0, 0, GOAL));
+    arenaUnlocked = clamp(parseInt(p.arenas, 10) || 1, 1, ARENAS.length);
+    arenaEq = parseInt(p.arena, 10) || 0;
+    xp = clamp(parseInt(p.xp, 10) || 0, 0, MAX_XP);
+    equipped = parseInt(p.skin, 10) || 0;
+    if (!(equipped >= 0 && equipped < SKINS.length) || SKINS[equipped].xp > xp)
+      equipped = 0;
+    if (!(arenaEq >= 0 && arenaEq < arenaUnlocked)) arenaEq = 0;
+  }
+  // asks the server for this player's progress
+  async function loadSession() {
+    try {
+      LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
+    } catch (e) {}
+    if (!CFG.url || !CFG.key) {
+      online = false;
+      return false;
+    }
+    try {
+      let res = await post("session", {});
+      if (res.status === 401) res = await post("session", {}); // new player
+      if (res.status === 200 && res.data && res.data.progress) {
+        online = true;
+        applyProgress(res.data.progress);
+        return true;
+      }
+    } catch (e) {}
+    online = false;
+    return false;
+  }
+  // the chosen arena and skin are saved on the server (it checks they're unlocked)
+  function saveProgress() {
+    if (!online) return;
+    enqueue(async () => {
+      try {
+        await post("select", { arena: arenaEq, skin: equipped });
+      } catch (e) {}
+    });
   }
   const isArenaUnlocked = (i) => i < arenaUnlocked;
   function makeFlakes() {
@@ -369,41 +460,17 @@
     }
     updateMenu();
   }
-  // winning an arena unlocks the next one, and the next run starts there
-  function unlockNextArena() {
-    arenaMsg = "";
-    if (arenaIdx < ARENAS.length - 1) {
-      const n = arenaIdx + 1;
-      if (n + 1 > arenaUnlocked) {
-        arenaUnlocked = n + 1;
-        arenaMsg = "Ny arena låst opp! Hva venter?";
-      }
-      arenaEq = n;
-    } else {
-      arenaMsg = "Du har klart alle " + ARENAS.length + " arenaene!";
-    }
-    saveProgress();
-  }
+  // local record, only for showing it right away; the server decides the real one
   function recordBest() {
     if (score > best) {
       best = score;
+      bests[arenaIdx] = best;
       bestBeaten = true;
-      saveBest();
     }
   }
   const isUnlocked = (i) => SKINS[i].xp <= xp;
   function pal() {
     return isUnlocked(skinIdx) ? SKINS[skinIdx].c : LOCKED_PAL;
-  }
-  function gainXp() {
-    if (xp >= MAX_XP) return;
-    const before = xp;
-    xp++;
-    runXp++;
-    SKINS.forEach((sk) => {
-      if (sk.xp > before && sk.xp <= xp) runUnlocked.push(sk.name);
-    });
-    saveProgress();
   }
   function updateMenu() {
     const sk = SKINS[skinIdx];
@@ -474,47 +541,6 @@
 
   setArena(arenaEq);
 
-  /* ---- trees ---- */
-  function makeTree(x) {
-    const gap = GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN);
-    const minTop = 55,
-      maxTop = GROUND - 55 - gap;
-    // pick anywhere in the full height, but limit the jump from the previous opening
-    const target = minTop + Math.random() * (maxTop - minTop);
-    const gapTop = clamp(target, lastGapTop - 230, lastGapTop + 230);
-    lastGapTop = gapTop;
-    const gapBottom = gapTop + gap;
-    const hT = gapTop + 30,
-      hB = GROUND + 8 - gapBottom;
-    return {
-      x,
-      seed: Math.floor(Math.random() * 1000),
-      gapTop,
-      gapBottom,
-      scored: false,
-      wT: clamp(58 + hT * 0.3, 72, 128),
-      wB: clamp(58 + hB * 0.3, 72, 128),
-    };
-  }
-  function hitTree(t) {
-    const parts = [
-      { tip: t.gapBottom, base: GROUND + 8, w: t.wB, dir: 1 },
-      { tip: t.gapTop, base: -30, w: t.wT, dir: -1 },
-    ];
-    for (const p of parts) {
-      const h = Math.abs(p.base - p.tip);
-      for (const dy of [-R, -R / 2, 0, R / 2, R]) {
-        const yy = eagle.y + dy;
-        const d = (yy - p.tip) * p.dir;
-        if (d < 0 || d > h) continue;
-        const hw = (((d / h) * p.w) / 2) * 0.8;
-        const reach = Math.sqrt(R * R - dy * dy);
-        if (Math.abs(eagle.x - t.x) < hw + reach * 0.9) return true;
-      }
-    }
-    return false;
-  }
-
   /* ---- particles ---- */
   function puff(x, y, n, color, spread, grav) {
     for (let i = 0; i < n; i++) {
@@ -545,8 +571,12 @@
     eagle.scale = 1;
     eagle.alpha = 1;
     eagle.energy = 0;
-    lastGapTop = 170;
-    curSpeed = BASE_SPEED;
+    sim = null;
+    run = null;
+    acc = 0;
+    flapQueued = false;
+    feather = false;
+    invuln = 0;
     winT = 0;
     winHold = 0;
     landedT = 0;
@@ -564,29 +594,132 @@
     arenaToast = 0;
     updateMenu();
   }
-  function start() {
-    // a locked skin can only be previewed; play with the last unlocked one
+  async function start() {
+    if (starting) return;
+    starting = true;
+    // wait for the server, then ask for a run (seed + token to verify it later)
+    let seed = null,
+      runToken = null;
+    try {
+      await sessionP;
+      if (online) {
+        await chain;
+        // a locked skin/arena can only be previewed; play with the last unlocked one
+        if (!isUnlocked(skinIdx)) skinIdx = equipped;
+        if (!isArenaUnlocked(arenaIdx)) setArena(arenaEq);
+        const { status, data } = await post("run-start", { arena: arenaIdx });
+        if (status === 200 && data) {
+          seed = data.seed;
+          runToken = data.runId;
+        } else {
+          await loadSession();
+        }
+      }
+    } catch (e) {}
     if (!isUnlocked(skinIdx)) skinIdx = equipped;
     if (!isArenaUnlocked(arenaIdx)) setArena(arenaEq);
+    if (runToken === null) {
+      // no server: play without saving
+      seed = Math.floor(Math.random() * 4294967296);
+      saveNote = "Ikke lagret: ingen kontakt med serveren.";
+    } else saveNote = "";
     arenaToast = 150;
     arenaMsg = "";
     makeVines(); // new random lianas every run
     runXp = 0;
     runUnlocked = [];
     bestBeaten = false;
-    feather = false;
-    featherDue = false;
-    featherSpawned = false;
     toast = 0;
-    invuln = 0;
+    sim = Sim.create(seed);
+    run = { runToken, inputs: [], frames: 0 };
+    acc = 0;
+    flapQueued = false;
+    eagle.y = sim.y;
+    eagle.vy = 0;
+    syncTrees();
     state = "play";
+    starting = false;
     intro.hidden = true;
-    trees = [makeTree(W + 130)];
     flap();
   }
   function flap() {
-    eagle.vy = FLAP;
+    flapQueued = true; // applied at the next simulation step
     eagle.energy = 1;
+  }
+  function syncTrees() {
+    trees = sim.trees.map((t) => Object.assign({}, t));
+  }
+  // one fixed step of the simulation; the server replays exactly these steps
+  function stepOnce() {
+    const fl = flapQueued;
+    flapQueued = false;
+    if (fl) run.inputs.push(sim.frame);
+    const ev = Sim.step(sim, fl);
+    scroll += sim.speed;
+    eagle.y = sim.y;
+    eagle.vy = sim.vy;
+    feather = sim.feather;
+    invuln = sim.invuln;
+    score = sim.score;
+    syncTrees();
+    if (ev.scored) scorePop = 1;
+    if (ev.pickup) {
+      toast = 150;
+      puff(ev.pickup.x, ev.pickup.y, 14, "#f5c542", 1.4, 0.03);
+      puff(ev.pickup.x, ev.pickup.y, 8, "#fff3b0", 1.2, 0.03);
+      if (!reduce) flash = 0.25;
+    }
+    if (ev.featherUsed) {
+      eagle.energy = 1;
+      if (!reduce) {
+        shake = 8;
+        flash = 0.35;
+      }
+      puff(eagle.x, eagle.y, 14, "#f5c542", 1.4, 0.03);
+      puff(eagle.x, eagle.y, 8, "#fff3b0", 1.2, 0.03);
+    }
+    if (sim.status === "play") return;
+    run.frames = sim.frame;
+    if (sim.status === "won") win();
+    else die();
+  }
+  // sends the run to the server, which replays it and decides score, XP and unlocks
+  function submitRun() {
+    const r = run;
+    run = null;
+    if (!r || !r.runToken || !online) return;
+    finishing = enqueue(async () => {
+      try {
+        const { status, data } = await post("run-finish", {
+          runId: r.runToken,
+          inputs: r.inputs,
+          frames: r.frames,
+        });
+        if (status === 200 && data && data.result) {
+          const before = xp;
+          applyProgress(data.progress);
+          const res = data.result;
+          score = res.score;
+          runXp = res.xpGained;
+          runUnlocked = SKINS.filter((sk) => sk.xp > before && sk.xp <= xp).map(
+            (sk) => sk.name,
+          );
+          bestBeaten = res.newBest;
+          best = bests[arenaIdx];
+          arenaMsg = res.unlockedArena
+            ? "Ny arena låst opp! Hva venter?"
+            : res.allCleared
+              ? "Du har klart alle " + ARENAS.length + " arenaene!"
+              : "";
+        } else {
+          saveNote = "Ikke lagret: serveren godtok ikke runden.";
+          await loadSession(); // pick up the newest progress
+        }
+      } catch (e) {
+        saveNote = "Ikke lagret: ingen kontakt med serveren.";
+      }
+      finishing = null;
+    });
   }
   function die() {
     state = "dying";
@@ -599,17 +732,29 @@
     recordBest();
     puff(eagle.x, eagle.y, 10, pal().head, 1.2, 0.03);
     puff(eagle.x, eagle.y, 8, pal().eagle, 1.2, 0.03);
+    submitRun();
   }
   function win() {
     state = "won";
     score = GOAL;
     recordBest();
-    unlockNextArena();
     winT = 0;
     winHold = 0;
     winStartY = eagle.y;
+    submitRun();
   }
   function showEnd(kind) {
+    if (finishing) {
+      // wait until the server has verified the run
+      if (!endWaiting) {
+        endWaiting = true;
+        finishing.then(() => {
+          endWaiting = false;
+          showEnd(kind);
+        });
+      }
+      return;
+    }
     endShown = true;
     state = kind === "won" ? "won" : "over";
     const newBest = bestBeaten;
@@ -631,6 +776,7 @@
           TREES_PER_XP +
           ". tre.";
     if (xp >= MAX_XP) xpText = "Maks level (" + MAX_XP + ")! " + xpText;
+    if (saveNote) xpText = saveNote;
     if (runUnlocked.length)
       xpText += " Låst opp: " + runUnlocked.join(", ") + "!";
     endXp.textContent = xpText;
@@ -802,96 +948,20 @@
   }
 
   function updatePlay(f) {
-    // faster every STEP_EVERY trees (20, 40, 60, 80), eased in smoothly
-    const target = BASE_SPEED + Math.floor(score / STEP_EVERY) * STEP_BOOST;
-    curSpeed += (target - curSpeed) * Math.min(1, 0.04 * f);
-    const speed = curSpeed;
-    scroll += speed * f;
-    eagle.vy = Math.min(eagle.vy + GRAV * f, MAXFALL);
-    eagle.y += eagle.vy * f;
-    if (eagle.y < 10) {
-      eagle.y = 10;
-      if (eagle.vy < 0) eagle.vy = 0;
+    // the simulation runs at a fixed 60 steps per second, whatever the screen rate
+    acc += f;
+    for (let n = 0; acc >= 1 && state === "play" && n < 4; n++) {
+      acc -= 1;
+      stepOnce();
     }
+    if (state !== "play") return;
+    // smooth drawing between two steps
+    eagle.y = sim.y + sim.vy * acc;
+    for (const t of trees) t.x -= sim.speed * acc;
     eagle.rot +=
-      (clamp(eagle.vy * 0.07, -0.5, 1.2) - eagle.rot) * Math.min(1, 0.25 * f);
-
-    for (const t of trees) t.x -= speed * f;
-    while (trees.length && trees[0].x < -90) trees.shift();
-    const last = trees[trees.length - 1];
-    if (!last || last.x < W + 130 - SPACING) {
-      trees.push(makeTree((last ? last.x : W + 130 - SPACING) + SPACING));
-    }
-
-    let won = false;
-    for (const t of trees) {
-      if (!t.scored && t.x < eagle.x) {
-        t.scored = true;
-        score++;
-        scorePop = 1;
-        if (score % TREES_PER_XP === 0) gainXp();
-        if (score === FEATHER_AT && !featherSpawned) featherDue = true;
-        if (score >= GOAL) {
-          won = true;
-          break;
-        }
-      }
-    }
-    if (won) {
-      win();
-      return;
-    }
-
-    // golden feather: put it in the gap of the furthest tree, ahead of the eagle
-    if (featherDue) {
-      const ahead = trees[trees.length - 1];
-      if (ahead && !ahead.scored) {
-        ahead.feather = true;
-        featherDue = false;
-        featherSpawned = true;
-      }
-    }
-    for (const t of trees) {
-      if (!t.feather) continue;
-      const fy = (t.gapTop + t.gapBottom) / 2;
-      if (Math.hypot(t.x - eagle.x, fy - eagle.y) < 34) {
-        t.feather = false;
-        feather = true;
-        toast = 150;
-        puff(t.x, fy, 14, "#f5c542", 1.4, 0.03);
-        puff(t.x, fy, 8, "#fff3b0", 1.2, 0.03);
-        if (!reduce) flash = 0.25;
-      }
-    }
+      (clamp(sim.vy * 0.07, -0.5, 1.2) - eagle.rot) * Math.min(1, 0.25 * f);
     if (toast > 0) toast = Math.max(0, toast - f);
     if (arenaToast > 0) arenaToast = Math.max(0, arenaToast - f);
-
-    if (eagle.y + R >= GROUND - 2) {
-      die();
-      return;
-    }
-    if (invuln > 0) invuln = Math.max(0, invuln - f);
-    for (const t of trees) {
-      if (Math.abs(t.x - eagle.x) < 90 && hitTree(t)) {
-        if (invuln > 0) continue;
-        if (feather) {
-          // the golden feather absorbs one hit
-          feather = false;
-          invuln = INVULN;
-          eagle.vy = FLAP * 0.6;
-          eagle.energy = 1;
-          if (!reduce) {
-            shake = 8;
-            flash = 0.35;
-          }
-          puff(eagle.x, eagle.y, 14, "#f5c542", 1.4, 0.03);
-          puff(eagle.x, eagle.y, 8, "#fff3b0", 1.2, 0.03);
-          continue;
-        }
-        die();
-        return;
-      }
-    }
   }
 
   /* ---- drawing ---- */
@@ -1870,6 +1940,15 @@
 
   /* ---- loop ---- */
   reset();
+  sessionP = loadSession().then((ok) => {
+    // progress from the server: show the right arena, skin and level
+    if (state === "ready" && !starting) {
+      skinIdx = equipped;
+      setArena(arenaEq);
+      updateMenu();
+    }
+    return ok;
+  });
   let last = performance.now();
   function loop(now) {
     const dt = Math.min(now - last, 50);

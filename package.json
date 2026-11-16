@@ -1,0 +1,11 @@
+{
+  "name": "flaksefeber",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Flaksefeber: spill der Supabase verifiserer fremgangen",
+  "scripts": {
+    "sync": "cp sim.js supabase/functions/game/sim.js",
+    "test": "node test/logic.test.js && node test/client.smoke.js",
+    "deploy": "npm run sync && npm test && npx supabase db push --linked && npx supabase functions deploy game"
+  }
+}

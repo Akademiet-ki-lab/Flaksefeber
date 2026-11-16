@@ -29,14 +29,14 @@ Når du har passert 40 trær i en runde, dukker det opp en gullfjær midt i åpn
 
 Startmenyen viser alltid «Din rekord er X av 100 trær» for arenaen du står i, så du ser hvor nær målet du var sist. Rekorden lagres med en gang du dør eller vinner.
 
-XP, valgt skin og rekorden din lagres i nettleseren (localStorage).
+XP, valgt skin og rekorden din lagres på en server (Supabase), ikke i nettleseren. Se «Fusksikring» lenger ned.
 
 ## Slik kjører du det
 
 1. Last ned mappen med filene under.
 2. Åpne `index.html` i Chrome (dobbeltklikk, eller dra filen inn i et nettleservindu).
 
-Filene må ligge i samme mappe. Husk å ta med `arenas.js`.
+Filene må ligge i samme mappe. Spillet trenger nett for å lagre fremgang. Uten kontakt med serveren kan du spille, men ingenting lagres, og nye arenaer og skins låses ikke opp.
 
 | Fil          | Innhold                                        |
 | ------------ | ---------------------------------------------- |
@@ -44,6 +44,10 @@ Filene må ligge i samme mappe. Husk å ta med `arenas.js`.
 | `style.css`  | Farger, typografi og layout                    |
 | `script.js`  | Hele spillet: fysikk, tegning og logikk        |
 | `arenas.js`  | De 10 arenaene: farger, bakgrunn, vær og trær  |
+| `sim.js`     | Spillreglene (fysikk, trær, score), delt med serveren |
+| `config.js`  | Supabase-adresse og publiserbar nøkkel         |
+| `supabase/`  | Database (migrasjon) og Edge Function `game`   |
+| `test/`      | Tester av reglene og av klienten               |
 
 Skrifttypene (Fjalla One og Nunito Sans) hentes fra Google Fonts, så du trenger nett første gang. Uten nett brukes reserveskrifter, og spillet fungerer likevel.
 
@@ -77,3 +81,27 @@ Fargene ligger som variabler øverst i `style.css`, og spillet leser dem derfra.
 Ren HTML, CSS og JavaScript med Canvas. Ingen biblioteker og ingen byggesteg. Spillet skalerer til skjermen og fungerer med mus, tastatur og berøring.
 
 Lykke til med spillingen!
+
+
+## Fusksikring (Supabase)
+
+Spilleren logges inn anonymt i Supabase. Fremgangen (rekorder, opplåste arenaer, XP, skin) ligger i tabellen `progress`, og nettleseren har ikke lov til å skrive til den (RLS er på uten policies). Det er bare Edge Function `game` som skriver, og den gjør det slik:
+
+1. Når en runde starter, får spilleren et tilfeldig frø (`seed`) fra serveren. Frøet bestemmer hvor åpningene mellom trærne havner.
+2. Når runden er over, sender nettleseren bare hvilke bilder (steg) du flakset i. Den sender ikke score eller XP.
+3. Serveren spiller av runden med samme regler (`sim.js`) og regner ut score, XP, rekord og opplåsing selv.
+4. Runder som er raskere enn sanntid, brukt to ganger eller startet fra gammel fremgang, avvises.
+
+Å endre localStorage eller koden i nettleseren gir derfor ingen fordel. Det du kan endre, er bare pene detaljer som tegningen. Det en server ikke kan se, er om en robot spiller for deg. Den må likevel klare spillet på ekte tid.
+
+### Sette opp
+
+```
+npx supabase login
+npx supabase link --project-ref hheyufazuxpeructpjpn   # spør om database-passordet
+npm run deploy                                         # tester, db push og functions deploy
+```
+
+Slå på **Authentication → Providers → Anonymous sign-ins** i Supabase-dashbordet (eller kjør `npx supabase config push`). `sim.js` må være lik i rotmappen og i `supabase/functions/game/`, så bruk `npm run sync` etter endringer i reglene (testen sjekker at de er like). Kjør `npm test` for testene.
+
+Publiserbar nøkkel i `config.js` er laget for å være offentlig. Database-passordet og `service_role`-nøkkelen skal aldri ligge i koden eller deles.

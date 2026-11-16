@@ -145,8 +145,18 @@ window.makeArenas = function (C, rgba) {
         cloud(g, 150, 190, 0.8, "#ffffff", 0.8);
         cloud(g, 270, 250, 1, "#ffffff", 0.85);
       },
-      far: { cap: "#ffffff", shade: "#cfe0ee", rock: "#6f9fb8", fog: "#dfeef2" },
-      near: { cap: "#8fd17a", shade: "#6cb35a", rock: "#4f9a4a", fog: "#cfe8c8" },
+      far: {
+        cap: "#ffffff",
+        shade: "#cfe0ee",
+        rock: "#6f9fb8",
+        fog: "#dfeef2",
+      },
+      near: {
+        cap: "#8fd17a",
+        shade: "#6cb35a",
+        rock: "#4f9a4a",
+        fog: "#cfe8c8",
+      },
       mist: "#e3f3e0",
       forest: { kind: "round", color: "#5c9a62" },
       ground: {
@@ -188,8 +198,18 @@ window.makeArenas = function (C, rgba) {
         cloud(g, 190, 40, 1.5, "#2b4a40", 0.85);
         cloud(g, 300, 190, 1.1, "#3d6656", 0.7);
       },
-      far: { cap: "#6fa88a", shade: "#4a8570", rock: "#2f5f52", fog: "#9fc8b4" },
-      near: { cap: "#3f8a62", shade: "#2d7050", rock: "#1d4d3c", fog: "#7eb39d" },
+      far: {
+        cap: "#6fa88a",
+        shade: "#4a8570",
+        rock: "#2f5f52",
+        fog: "#9fc8b4",
+      },
+      near: {
+        cap: "#3f8a62",
+        shade: "#2d7050",
+        rock: "#1d4d3c",
+        fog: "#7eb39d",
+      },
       mist: "#bcd9c5",
       forest: { kind: "round", color: "#2a5e4a" },
       ground: {
@@ -231,8 +251,18 @@ window.makeArenas = function (C, rgba) {
         cloud(g, 200, 190, 1, "#f6c3a0", 0.7);
         cloud(g, 120, 40, 0.9, "#a88ab0", 0.6);
       },
-      far: { cap: "#f2d9c0", shade: "#d5b79f", rock: "#9a7a7a", fog: "#e8cdb8" },
-      near: { cap: "#d9822b", shade: "#b5602a", rock: "#7a4a3a", fog: "#d8b093" },
+      far: {
+        cap: "#f2d9c0",
+        shade: "#d5b79f",
+        rock: "#9a7a7a",
+        fog: "#e8cdb8",
+      },
+      near: {
+        cap: "#d9822b",
+        shade: "#b5602a",
+        rock: "#7a4a3a",
+        fog: "#d8b093",
+      },
       mist: "#f0d9bf",
       forest: { kind: "round", color: "#a85a33" },
       ground: {
@@ -271,8 +301,18 @@ window.makeArenas = function (C, rgba) {
         disc(g, 90, 130, 38, "#fffbe0", 170, 0.7);
         cloud(g, 230, 80, 0.9, "#ffffff", 0.5);
       },
-      far: { cap: "#f3d9a8", shade: "#dcb87c", rock: "#c18b52", fog: "#f3deb4" },
-      near: { cap: "#f0c685", shade: "#d6a35f", rock: "#b87a40", fog: "#efd2a0" },
+      far: {
+        cap: "#f3d9a8",
+        shade: "#dcb87c",
+        rock: "#c18b52",
+        fog: "#f3deb4",
+      },
+      near: {
+        cap: "#f0c685",
+        shade: "#d6a35f",
+        rock: "#b87a40",
+        fog: "#efd2a0",
+      },
       mist: "#f3e0bd",
       forest: { kind: "cactus", color: "#b48a4a" },
       ground: {
@@ -312,8 +352,18 @@ window.makeArenas = function (C, rgba) {
         cloud(g, 30, 100, 1.2, "#ffffff", 0.9);
         cloud(g, 170, 170, 0.8, "#ffffff", 0.85);
       },
-      far: { cap: "#e8f4f8", shade: "#bcd6e0", rock: "#7aa0b4", fog: "#d5e8f0" },
-      near: { cap: "#9ab8c4", shade: "#7a9aa8", rock: "#506e80", fog: "#b7d4e0" },
+      far: {
+        cap: "#e8f4f8",
+        shade: "#bcd6e0",
+        rock: "#7aa0b4",
+        fog: "#d5e8f0",
+      },
+      near: {
+        cap: "#9ab8c4",
+        shade: "#7a9aa8",
+        rock: "#506e80",
+        fog: "#b7d4e0",
+      },
       mist: "#d5e8f0",
       forest: { kind: "spike", color: "#6c8696" },
       ground: {
@@ -373,8 +423,18 @@ window.makeArenas = function (C, rgba) {
         cloud(g, 270, 255, 1.4, "#2a2024", 0.8);
         cloud(g, 30, 150, 1.2, "#2a1519", 0.7);
       },
-      far: { cap: "#5a3a3a", shade: "#432828", rock: "#2e1b1d", fog: "#6b3030" },
-      near: { cap: "#3b2426", shade: "#2a1719", rock: "#1d1012", fog: "#4d2423" },
+      far: {
+        cap: "#5a3a3a",
+        shade: "#432828",
+        rock: "#2e1b1d",
+        fog: "#6b3030",
+      },
+      near: {
+        cap: "#3b2426",
+        shade: "#2a1719",
+        rock: "#1d1012",
+        fog: "#4d2423",
+      },
       mist: "#7a3030",
       forest: { kind: "spike", color: "#2a1519" },
       ground: {
@@ -436,8 +496,18 @@ window.makeArenas = function (C, rgba) {
           "#ffffff",
         );
       },
-      far: { cap: "#ffffff", shade: "#e3d0e6", rock: "#9a9fcf", fog: "#fbe3ec" },
-      near: { cap: "#f6b5cc", shade: "#e08fb0", rock: "#9a6fa0", fog: "#f6cde0" },
+      far: {
+        cap: "#ffffff",
+        shade: "#e3d0e6",
+        rock: "#9a9fcf",
+        fog: "#fbe3ec",
+      },
+      near: {
+        cap: "#f6b5cc",
+        shade: "#e08fb0",
+        rock: "#9a6fa0",
+        fog: "#f6cde0",
+      },
       mist: "#fbe3ec",
       forest: { kind: "round", color: "#e6a1b9" },
       ground: {
@@ -504,8 +574,18 @@ window.makeArenas = function (C, rgba) {
         g.arc(300, 130, 40, 0, 6.283);
         g.fill();
       },
-      far: { cap: "#c8cbe0", shade: "#9a9dbf", rock: "#6a6d94", fog: "#3a3e70" },
-      near: { cap: "#b3b6d3", shade: "#8286ab", rock: "#555880", fog: "#34385f" },
+      far: {
+        cap: "#c8cbe0",
+        shade: "#9a9dbf",
+        rock: "#6a6d94",
+        fog: "#3a3e70",
+      },
+      near: {
+        cap: "#b3b6d3",
+        shade: "#8286ab",
+        rock: "#555880",
+        fog: "#34385f",
+      },
       mist: "#7a74b0",
       forest: { kind: "spike", color: "#4a4e82" },
       ground: {
@@ -562,8 +642,18 @@ window.makeArenas = function (C, rgba) {
         cloud(g, 250, 60, 1, "#ffffff", 0.8);
         cloud(g, 120, 200, 0.8, "#fff6e8", 0.85);
       },
-      far: { cap: "#ffffff", shade: "#fbe6d0", rock: "#e8b8c8", fog: "#fff0d0" },
-      near: { cap: "#ffffff", shade: "#fff0d8", rock: "#f2cf9a", fog: "#fff3cf" },
+      far: {
+        cap: "#ffffff",
+        shade: "#fbe6d0",
+        rock: "#e8b8c8",
+        fog: "#fff0d0",
+      },
+      near: {
+        cap: "#ffffff",
+        shade: "#fff0d8",
+        rock: "#f2cf9a",
+        fog: "#fff3cf",
+      },
       mist: "#fff3cf",
       forest: { kind: "round", color: "#fff6e8" },
       ground: {
