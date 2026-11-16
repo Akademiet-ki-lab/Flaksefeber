@@ -18,20 +18,63 @@ window.makeArenas = function (C, rgba) {
     g.arc(x, y, r, 0, 6.283);
     g.fill();
   }
+  function shadeOf(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const f = (v) => Math.round(v * 0.78 + 10);
+    return (
+      "#" +
+      [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+        .map((v) => f(v).toString(16).padStart(2, "0"))
+        .join("")
+    );
+  }
+  function lightOf(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const f = (v) => Math.min(255, Math.round(v + (255 - v) * 0.4));
+    return (
+      "#" +
+      [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+        .map((v) => f(v).toString(16).padStart(2, "0"))
+        .join("")
+    );
+  }
+  // cartoon cloud: one solid shape (a single path and fill, so overlapping
+  // parts never show through), flat rounded bottom, soft shadow and a highlight
   function cloud(g, x, y, s, col, a) {
-    g.fillStyle = rgba(col, a);
+    const k = s * 0.9,
+      ox = x - 40 * k,
+      oy = y;
+    g.save();
+    g.beginPath();
+    // flat pill-shaped base
+    g.rect(ox + 11 * k, oy + 0 * k, 78 * k, 22 * k);
+    g.moveTo(ox + 22 * k, oy + 11 * k);
+    g.arc(ox + 11 * k, oy + 11 * k, 11 * k, 0, 6.283);
+    g.moveTo(ox + 100 * k, oy + 11 * k);
+    g.arc(ox + 89 * k, oy + 11 * k, 11 * k, 0, 6.283);
+    // round bumps on top
     [
-      [0, 0, 16],
-      [18, -9, 20],
-      [40, -2, 17],
-      [20, 5, 18],
-      [-10, 6, 11],
-      [50, 7, 11],
+      [24, 3, 16],
+      [47, -8, 23],
+      [71, -1, 18],
+      [86, 7, 11],
     ].forEach((c) => {
-      g.beginPath();
-      g.arc(x + c[0] * s, y + c[1] * s, c[2] * s, 0, 6.283);
-      g.fill();
+      g.moveTo(ox + (c[0] + c[2]) * k, oy + c[1] * k);
+      g.arc(ox + c[0] * k, oy + c[1] * k, c[2] * k, 0, 6.283);
     });
+    const gr = g.createLinearGradient(0, oy - 30 * k, 0, oy + 22 * k);
+    gr.addColorStop(0, rgba(col, a));
+    gr.addColorStop(0.55, rgba(col, a));
+    gr.addColorStop(1, rgba(shadeOf(col), a));
+    g.fillStyle = gr;
+    g.fill();
+    // soft highlight on the big bump
+    g.clip();
+    g.fillStyle = rgba(lightOf(col), 0.5 * a);
+    g.beginPath();
+    g.ellipse(ox + 40 * k, oy - 17 * k, 11 * k, 5.5 * k, -0.5, 0, 6.283);
+    g.fill();
+    g.restore();
   }
   function poly(g, pts, col) {
     g.fillStyle = col;
