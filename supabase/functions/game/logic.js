@@ -8,9 +8,18 @@
   else root.GameLogic = factory(root.Sim);
 })(typeof self !== "undefined" ? self : this, function (Sim) {
   "use strict";
-  const { GOAL, MAX_XP, TREES_PER_XP, ARENA_COUNT, SKIN_XP, MAX_FRAMES } =
-    Sim.CONST;
+  const {
+    GOAL,
+    MAX_XP,
+    TREES_PER_XP,
+    ARENA_COUNT,
+    SKIN_XP,
+    MAX_FRAMES,
+    MAX_FRAMES_COMP,
+    CLASSES,
+  } = Sim.CONST;
   const RUN_TTL = 30 * 60 * 1000;
+  const RUN_TTL_COMP = 60 * 60 * 1000;
   const isInt = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
 
   const newProgress = () => ({
@@ -82,7 +91,48 @@
     return { next, result };
   }
 
+  /*
+    Competition run: no progress, XP or unlocks, only a score for the
+    leaderboard. run = {seed, startedAt (ms)}. Returns {error} or {result}.
+  */
+  function computeCompetition(run, inputs, frames, now) {
+    if (!Array.isArray(inputs) || inputs.length > MAX_FRAMES_COMP)
+      return { error: "rejected" };
+    if (!isInt(frames, 1, MAX_FRAMES_COMP)) return { error: "rejected" };
+    let prev = -1;
+    for (const n of inputs) {
+      if (!isInt(n, 0, frames - 1) || n <= prev) return { error: "rejected" };
+      prev = n;
+    }
+    const age = now - run.startedAt;
+    if (!(age >= 0) || age > RUN_TTL_COMP) return { error: "rejected" };
+    const r = Sim.replay(run.seed, inputs, frames, true);
+    if (age < (r.frames / 60) * 1000 * 0.8 - 2000) return { error: "rejected" };
+    return { result: { score: r.score, frames: r.frames } };
+  }
+
+  // a name for the leaderboard: 1-20 visible characters, no control characters
+  function cleanName(v) {
+    if (typeof v !== "string") return null;
+    const s = v
+      .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069<>]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const len = Array.from(s).length;
+    return len >= 1 && len <= 20 ? s : null;
+  }
+  const isClass = (k) => typeof k === "string" && CLASSES.includes(k);
+  function validCompetitor(name, klass) {
+    const n = cleanName(name);
+    return n && isClass(klass) ? { name: n, klass } : null;
+  }
+
   return {
+    computeCompetition,
+    cleanName,
+    isClass,
+    validCompetitor,
+    CLASSES,
     newProgress,
     publicProgress,
     canPlayArena,

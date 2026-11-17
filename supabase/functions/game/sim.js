@@ -37,6 +37,26 @@
     EAGLE_X: 110,
     START_Y: 290,
     MAX_FRAMES: 20000, // hard cap for one run (about 5.5 minutes)
+    // Competition mode: no goal, the course just keeps coming and gets faster.
+    COMP_STEP_EVERY: 10, // trees between each speed increase
+    COMP_STEP_BOOST: 0.15,
+    COMP_MAX_SPEED: 7.5, // the eagle never moves more than this far per step
+    MAX_FRAMES_COMP: 108000, // technical cap for one run (30 minutes)
+    CLASSES: Object.freeze([
+      "1IM",
+      "2IM",
+      "1MK",
+      "2MK",
+      "3MK",
+      "1STA",
+      "2STA",
+      "3STA",
+      "1STB",
+      "2STB",
+      "3STB",
+      "Påbygg",
+      "Lærere",
+    ]),
     ARENA_COUNT: 10,
     SKIN_XP: Object.freeze([0, 20, 40, 70, 100, 140, 200]),
   });
@@ -50,6 +70,9 @@
     BASE_SPEED,
     STEP_EVERY,
     STEP_BOOST,
+    COMP_STEP_EVERY,
+    COMP_STEP_BOOST,
+    COMP_MAX_SPEED,
     GRAV,
     FLAP,
     MAXFALL,
@@ -118,8 +141,10 @@
     return false;
   }
 
-  function create(seed) {
+  // comp = competition mode (no goal, faster every COMP_STEP_EVERY trees)
+  function create(seed, comp) {
     const s = {
+      comp: !!comp,
       rng: rngFrom(seed),
       status: "play", // play | dead | won
       frame: 0, // steps taken so far
@@ -149,7 +174,12 @@
     if (flap || frame === 0) s.vy = FLAP; // the first step always flaps
 
     // faster every STEP_EVERY trees, eased in smoothly
-    const target = BASE_SPEED + Math.floor(s.score / STEP_EVERY) * STEP_BOOST;
+    const target = s.comp
+      ? Math.min(
+          COMP_MAX_SPEED,
+          BASE_SPEED + Math.floor(s.score / COMP_STEP_EVERY) * COMP_STEP_BOOST,
+        )
+      : BASE_SPEED + Math.floor(s.score / STEP_EVERY) * STEP_BOOST;
     s.speed += (target - s.speed) * 0.04;
     s.vy = Math.min(s.vy + GRAV, MAXFALL);
     s.y += s.vy;
@@ -172,7 +202,7 @@
         ev.scored++;
         if (s.score % TREES_PER_XP === 0) ev.xpTicks++;
         if (s.score === FEATHER_AT && !s.featherSpawned) s.featherDue = true;
-        if (s.score >= GOAL) {
+        if (!s.comp && s.score >= GOAL) {
           s.status = "won";
           return ev;
         }
@@ -228,10 +258,10 @@
     Replay a whole run. `inputs` = ascending step numbers where the player
     flapped. Runs until the eagle dies, wins, or `frames` steps are used.
   */
-  function replay(seed, inputs, frames) {
-    const s = create(seed);
+  function replay(seed, inputs, frames, comp) {
+    const s = create(seed, comp);
     const set = new Set(inputs);
-    const max = Math.min(frames, CONST.MAX_FRAMES);
+    const max = Math.min(frames, comp ? CONST.MAX_FRAMES_COMP : CONST.MAX_FRAMES);
     while (s.status === "play" && s.frame < max) step(s, set.has(s.frame));
     return {
       score: s.score,

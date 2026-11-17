@@ -7,7 +7,10 @@
 //   session                      -> { progress }
 //   select    { arena, skin }    -> { progress }
 //   run-start { arena }          -> { runId, seed }
+//   run-start { mode: "comp" }   -> { runId, seed }   (competition run)
 //   run-finish{ runId, inputs, frames } -> { progress, result }
+//   run-finish{ runId, inputs, frames, name, klass } -> { result }  (competition)
+//   leaderboard { klass? }       -> { rows, me }
 import { createClient } from "npm:@supabase/supabase-js@2";
 import "./sim.js";
 import "./logic.js";
@@ -53,6 +56,18 @@ async function getProgress(userId: string): Promise<Row | null> {
   return data;
 }
 
+// place on the leaderboard: 1 + the number of visible players ahead of this score
+async function rankOf(best: number, achievedAt: string, klass: string | null) {
+  let q = admin
+    .from("leaderboard")
+    .select("user_id", { count: "exact", head: true })
+    .eq("hidden", false)
+    .or(`best.gt.${best},and(best.eq.${best},achieved_at.lt."${achievedAt}")`);
+  if (klass) q = q.eq("klass", klass);
+  const { count, error } = await q;
+  return error ? null : (count ?? 0) + 1;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return fail(405, "method");
@@ -93,7 +108,8 @@ Deno.serve(async (req) => {
     }
 
     case "run-start": {
-      if (!L.canPlayArena(p, body.arena)) return fail(400, "locked");
+      const comp = body.mode === "comp";
+      if (!comp && !L.canPlayArena(p, body.arena)) return fail(400, "locked");
       const since = new Date(Date.now() - 60_000).toISOString();
       const { count } = await admin
         .from("runs")
@@ -110,7 +126,13 @@ Deno.serve(async (req) => {
       const seed = crypto.getRandomValues(new Uint32Array(1))[0];
       const { data, error } = await admin
         .from("runs")
-        .insert({ user_id: userId, seed, seq: p.seq, arena: body.arena })
+        .insert({
+          user_id: userId,
+          seed,
+          seq: p.seq,
+          arena: comp ? 0 : body.arena,
+          mode: comp ? "comp" : "normal",
+        })
         .select("id")
         .single();
       if (error) return fail(500, "db");
@@ -126,6 +148,70 @@ Deno.serve(async (req) => {
         .eq("user_id", userId)
         .maybeSingle();
       if (!run || run.finished) return fail(409, "stale");
+
+      if (run.mode === "comp") {
+        const who = L.validCompetitor(body.name, body.klass);
+        if (!who) return fail(400, "bad_name");
+        const c = L.computeCompetition(
+          { seed: Number(run.seed), startedAt: Date.parse(run.started_at) },
+          body.inputs,
+          body.frames,
+          Date.now(),
+        );
+        if (c.error) return fail(400, c.error);
+        const score: number = c.result.score;
+
+        const { data: claimed } = await admin
+          .from("runs")
+          .update({ finished: true })
+          .eq("id", run.id)
+          .eq("finished", false)
+          .select("id");
+        if (!claimed?.length) return fail(409, "stale");
+
+        const { data: row } = await admin
+          .from("leaderboard")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle();
+        const now = new Date().toISOString();
+        let best = score;
+        let achieved = now;
+        let newBest = score > 0;
+        let hidden = false;
+        if (row) {
+          hidden = row.hidden;
+          if (score > row.best) {
+            newBest = true;
+          } else {
+            best = row.best;
+            achieved = row.achieved_at;
+            newBest = false;
+          }
+          const { error } = await admin
+            .from("leaderboard")
+            .update({
+              name: who.name,
+              klass: who.klass,
+              best,
+              achieved_at: achieved,
+              updated_at: now,
+            })
+            .eq("user_id", userId);
+          if (error) return fail(500, "db");
+        } else if (score > 0) {
+          const { error } = await admin.from("leaderboard").insert({
+            user_id: userId,
+            name: who.name,
+            klass: who.klass,
+            best,
+            achieved_at: achieved,
+          });
+          if (error) return fail(500, "db");
+        }
+        const rank = best > 0 && !hidden ? await rankOf(best, achieved, null) : null;
+        return json(200, { result: { score, best, newBest, rank } });
+      }
 
       const out = L.computeFinish(
         p,
@@ -169,6 +255,44 @@ Deno.serve(async (req) => {
       if (error) return fail(500, "db");
       if (!saved?.length) return fail(409, "stale");
       return json(200, { progress: L.publicProgress(saved[0]), result: out.result });
+    }
+
+    case "leaderboard": {
+      const klass = L.isClass(body.klass) ? body.klass : null;
+      let q = admin
+        .from("leaderboard")
+        .select("user_id,name,klass,best")
+        .eq("hidden", false)
+        .gt("best", 0)
+        .order("best", { ascending: false })
+        .order("achieved_at", { ascending: true })
+        .limit(50);
+      if (klass) q = q.eq("klass", klass);
+      const { data, error } = await q;
+      if (error) return fail(500, "db");
+      const rows = (data ?? []).map((r: Row, i: number) => ({
+        rank: i + 1,
+        name: r.name,
+        klass: r.klass,
+        score: r.best,
+        me: r.user_id === userId,
+      }));
+      let me: Row = null;
+      const { data: mine } = await admin
+        .from("leaderboard")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (mine && mine.best > 0) {
+        const visible = !mine.hidden && (!klass || mine.klass === klass);
+        me = {
+          best: mine.best,
+          name: mine.name,
+          klass: mine.klass,
+          rank: visible ? await rankOf(mine.best, mine.achieved_at, klass) : null,
+        };
+      }
+      return json(200, { rows, me });
     }
 
     default:

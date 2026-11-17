@@ -32,7 +32,7 @@
               treffe.
             </p>
             <p class="record" id="record"></p>
-            <p>Klarer du alle 100?</p>
+            <p id="goalLine">Klarer du alle 100?</p>
           </div>
           <div class="tap" id="tap">Trykk for å flakse</div>
           <div class="skins" id="skins">
@@ -86,6 +86,60 @@
           </div>
         </div>
 
+        <div class="screen" id="menu">
+          <div class="head">
+            <h1>Flaksefeber</h1>
+            <p>
+              Hold havørnen høyt over granskogen og fly mellom trærne uten å
+              treffe.
+            </p>
+          </div>
+          <div class="modes">
+            <button class="mode" id="modeNormal" type="button">
+              Vanlig<small>10 arenaer · 100 trær · XP og skins</small>
+            </button>
+            <button class="mode comp" id="modeComp" type="button">
+              Konkurranse<small>Ingen grense · kom øverst på topplisten</small>
+            </button>
+          </div>
+          <button class="link" id="menuLb" type="button">
+            Se toppliste &#8250;
+          </button>
+        </div>
+
+        <div class="screen" id="compForm" hidden>
+          <button class="back" id="formBack" type="button">&#8249; Meny</button>
+          <form class="card" id="compFormEl" autocomplete="off">
+            <h2>Konkurranse</h2>
+            <label for="compName">Navn</label>
+            <input
+              type="text"
+              id="compName"
+              maxlength="20"
+              placeholder="Skriv navnet ditt"
+              autocomplete="off"
+            />
+            <label id="klassLabel">Klasse</label>
+            <div
+              class="chips"
+              id="klasser"
+              role="group"
+              aria-labelledby="klassLabel"
+            ></div>
+            <button class="btn primary" id="compStart" type="submit" disabled>
+              Start konkurranse
+            </button>
+          </form>
+        </div>
+
+        <button class="back menu-btn" id="toMenu" type="button" hidden>
+          &#8249; Meny
+        </button>
+        <div class="hud" id="compHud" hidden>
+          <span id="hudName"></span>
+          <span class="hud-best" id="hudBest"></span>
+        </div>
+
         <div
           class="end"
           id="end"
@@ -95,7 +149,7 @@
         >
           <h2 id="endTitle"></h2>
           <div class="score">
-            <span id="endScore">0</span><small>av 100 trær</small>
+            <span id="endScore">0</span><small id="endUnit">av 100 trær</small>
           </div>
           <p class="best" id="endBest"></p>
           <p class="xp" id="endXp"></p>
@@ -104,6 +158,8 @@
               Spill på nytt
             </button>
             <button class="btn" id="share" type="button">Del score</button>
+            <button class="btn" id="endLb" type="button" hidden>Toppliste</button>
+            <button class="btn" id="endMenu" type="button" hidden>Meny</button>
           </div>
           <p class="msg" id="shareMsg" aria-live="polite"></p>
           <p class="shareout" id="shareOut" hidden>
@@ -114,6 +170,21 @@
               aria-label="Tekst som kan kopieres"
             />
           </p>
+        </div>
+
+        <div
+          class="screen lb"
+          id="lb"
+          role="dialog"
+          aria-labelledby="lbTitle"
+          hidden
+        >
+          <div class="card">
+            <h2 id="lbTitle">Toppliste</h2>
+            <div class="tabs" id="lbTabs"></div>
+            <div class="tbl" id="lbRows"></div>
+            <button class="btn" id="lbClose" type="button">Lukk</button>
+          </div>
         </div>
       </div>
     </div>
