@@ -15,6 +15,7 @@
     FEATHER_AT, // a golden feather appears after this many trees in a run
   } = Sim.CONST;
   const KEY_AUTH = "orneflukt-auth"; // Supabase session (anonymous player)
+  const KEY_COMPETITOR = "orneflukt-competitor";
   const LEGACY_KEYS = [
     "orneflukt-best",
     "orneflukt-bests",
@@ -223,6 +224,30 @@
     leaderboardClass = null,
     compBest = 0,
     compRank = null;
+
+  function rememberCompetitor() {
+    const name = nameInput.value.trim();
+    if (!name) return;
+    try {
+      localStorage.setItem(
+        KEY_COMPETITOR,
+        JSON.stringify({ name, klass: selectedClass }),
+      );
+    } catch (_) {}
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY_COMPETITOR));
+    if (
+      saved &&
+      typeof saved.name === "string" &&
+      saved.name.trim() &&
+      classes.includes(saved.klass)
+    ) {
+      nameInput.value = saved.name.slice(0, 20);
+      selectedClass = saved.klass;
+      compStart.disabled = false;
+    }
+  } catch (_) {}
 
   let view = 1;
   let cacheDirty = true,
@@ -935,21 +960,24 @@
   classes.forEach((klass, i) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "chip" + (i === 0 ? " on" : "");
+    b.className = "chip" + (klass === selectedClass ? " on" : "");
     b.textContent = klass;
     b.addEventListener("click", () => {
       selectedClass = klass;
       [...classBox.children].forEach((x) => x.classList.toggle("on", x === b));
+      rememberCompetitor();
     });
     classBox.appendChild(b);
   });
   nameInput.addEventListener("input", () => {
     compStart.disabled = !nameInput.value.trim();
+    rememberCompetitor();
   });
   $("compFormEl").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = nameInput.value.trim();
     if (!name) return;
+    rememberCompetitor();
     competitor = { name, klass: selectedClass };
     gameMode = "comp";
     compBest = 0;
