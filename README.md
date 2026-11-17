@@ -31,6 +31,12 @@ Startmenyen viser alltid «Din rekord er X av 100 trær» for arenaen du står i
 
 XP, valgt skin og rekorden din lagres på en server (Supabase), ikke i nettleseren. Se «Fusksikring» lenger ned.
 
+## Konkurranse og felles toppliste
+
+Velg **Konkurranse** fra menyen, skriv inn navn og klasse, og spill så lenge du klarer. Konkurranserunden har ingen målscore og gir ikke XP eller arenaopplåsing. Serveren kontrollerer rundene og lagrer kun spillerens beste resultat. Topplista er felles for alle som bruker samme publiserte spill og Supabase-prosjekt; den kan vises samlet eller filtrert på klasse. Navnet og klassen kan oppdateres ved neste konkurranserunde. En skjult rad kan administreres fra Supabase-dashbordet.
+
+Funksjonen krever migrasjonen `supabase/migrations/20261117000000_competition.sql` kjørt på Supabase-prosjektet. `npm run deploy` gjør dette som del av utrullingen.
+
 ## Slik kjører du det
 
 1. Last ned mappen med filene under.

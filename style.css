@@ -338,6 +338,7 @@ canvas {
 }
 
 /* Mode menu, competition form, leaderboard */
+.screen[hidden], .hud[hidden], .back[hidden], .end[hidden], .intro[hidden] { display: none !important; }
 .screen {
   position: absolute;
   inset: 0;
