@@ -205,12 +205,24 @@
     shareMsg = $("shareMsg"),
     shareOut = $("shareOut"),
     shareText = $("shareText");
-  const menu = $("menu"), compForm = $("compForm"), lb = $("lb"),
-    nameInput = $("compName"), classBox = $("klasser"), compStart = $("compStart"),
-    lbRows = $("lbRows"), lbTabs = $("lbTabs"), compHud = $("compHud"),
-    hudName = $("hudName"), hudBest = $("hudBest"), classes = Sim.CONST.CLASSES;
-  let selectedClass = classes[0], gameMode = "normal", competitor = null,
-    leaderboardClass = null, compBest = 0, compRank = null;
+  const menu = $("menu"),
+    compForm = $("compForm"),
+    lb = $("lb"),
+    nameInput = $("compName"),
+    classBox = $("klasser"),
+    compStart = $("compStart"),
+    lbRows = $("lbRows"),
+    lbTabs = $("lbTabs"),
+    compHud = $("compHud"),
+    hudName = $("hudName"),
+    hudBest = $("hudBest"),
+    classes = Sim.CONST.CLASSES;
+  let selectedClass = classes[0],
+    gameMode = "normal",
+    competitor = null,
+    leaderboardClass = null,
+    compBest = 0,
+    compRank = null;
 
   let view = 1;
   let cacheDirty = true,
@@ -308,7 +320,10 @@
   const enqueue = (fn) => (chain = chain.then(fn, fn));
 
   const authHeaders = (extra) =>
-    Object.assign({ "Content-Type": "application/json", apikey: CFG.key }, extra);
+    Object.assign(
+      { "Content-Type": "application/json", apikey: CFG.key },
+      extra,
+    );
   let authP = null;
   function readAuth() {
     try {
@@ -468,7 +483,10 @@
   }
   // local record, only for showing it right away; the server decides the real one
   function recordBest() {
-    if (gameMode === "comp") { if (score > compBest) compBest = score; return; }
+    if (gameMode === "comp") {
+      if (score > compBest) compBest = score;
+      return;
+    }
     if (score > best) {
       best = score;
       bests[arenaIdx] = best;
@@ -594,7 +612,9 @@
     endEl.hidden = true;
     state = "ready";
     compHud.hidden = gameMode !== "comp";
-    document.querySelector(".intro").classList.toggle("comp", gameMode === "comp");
+    document
+      .querySelector(".intro")
+      .classList.toggle("comp", gameMode === "comp");
     if (gameMode === "comp") {
       menu.hidden = compForm.hidden = lb.hidden = true;
       hudName.textContent = competitor.name + " · " + competitor.klass;
@@ -621,7 +641,10 @@
         // a locked skin/arena can only be previewed; play with the last unlocked one
         if (!isUnlocked(skinIdx)) skinIdx = equipped;
         if (!isArenaUnlocked(arenaIdx)) setArena(arenaEq);
-        const { status, data } = await post("run-start", gameMode === "comp" ? { mode: "comp" } : { arena: arenaIdx });
+        const { status, data } = await post(
+          "run-start",
+          gameMode === "comp" ? { mode: "comp" } : { arena: arenaIdx },
+        );
         if (status === 200 && data) {
           seed = data.seed;
           runToken = data.runId;
@@ -713,24 +736,27 @@
         const { status, data } = await post("run-finish", body);
         if (status === 200 && data && data.result) {
           if (gameMode === "comp") {
-            score = data.result.score; compBest = data.result.best; compRank = data.result.rank;
-            bestBeaten = data.result.newBest; hudBest.textContent = "Beste: " + compBest;
+            score = data.result.score;
+            compBest = data.result.best;
+            compRank = data.result.rank;
+            bestBeaten = data.result.newBest;
+            hudBest.textContent = "Beste: " + compBest;
           } else {
-          const before = xp;
-          applyProgress(data.progress);
-          const res = data.result;
-          score = res.score;
-          runXp = res.xpGained;
-          runUnlocked = SKINS.filter((sk) => sk.xp > before && sk.xp <= xp).map(
-            (sk) => sk.name,
-          );
-          bestBeaten = res.newBest;
-          best = bests[arenaIdx];
-          arenaMsg = res.unlockedArena
-            ? "Ny arena låst opp! Hva venter?"
-            : res.allCleared
-              ? "Du har klart alle " + ARENAS.length + " arenaene!"
-              : "";
+            const before = xp;
+            applyProgress(data.progress);
+            const res = data.result;
+            score = res.score;
+            runXp = res.xpGained;
+            runUnlocked = SKINS.filter(
+              (sk) => sk.xp > before && sk.xp <= xp,
+            ).map((sk) => sk.name);
+            bestBeaten = res.newBest;
+            best = bests[arenaIdx];
+            arenaMsg = res.unlockedArena
+              ? "Ny arena låst opp! Hva venter?"
+              : res.allCleared
+                ? "Du har klart alle " + ARENAS.length + " arenaene!"
+                : "";
           }
         } else {
           saveNote = "Ikke lagret: serveren godtok ikke runden.";
@@ -779,26 +805,36 @@
     endShown = true;
     state = kind === "won" ? "won" : "over";
     const newBest = bestBeaten;
-    endTitle.textContent = gameMode === "comp" ? (bestBeaten ? "Ny personlig rekord!" : "Runden er over") :
-      kind === "won"
-        ? "WOW, du er veldig flink! Men klarer du det igjen?"
-        : "Au! Du traff et tre.";
+    endTitle.textContent =
+      gameMode === "comp"
+        ? bestBeaten
+          ? "Ny personlig rekord!"
+          : "Runden er over"
+        : kind === "won"
+          ? "WOW, du er veldig flink! Men klarer du det igjen?"
+          : "Au! Du traff et tre.";
     endScore.textContent = String(score);
     $("endUnit").textContent = gameMode === "comp" ? "trær" : "av 100 trær";
-    endBest.textContent = gameMode === "comp" ? (compRank ? "Du er nummer " + compRank + " på topplista!" : "Personlig rekord: " + compBest) :
-      kind === "won"
-        ? "Full score. Alle 100 trær." + (arenaMsg ? " " + arenaMsg : "")
-        : newBest && score > 0
-          ? "Ny rekord!"
-          : "Rekord: " + best;
+    endBest.textContent =
+      gameMode === "comp"
+        ? compRank
+          ? "Du er nummer " + compRank + " på topplista!"
+          : "Personlig rekord: " + compBest
+        : kind === "won"
+          ? "Full score. Alle 100 trær." + (arenaMsg ? " " + arenaMsg : "")
+          : newBest && score > 0
+            ? "Ny rekord!"
+            : "Rekord: " + best;
     let xpText =
       runXp > 0
         ? "+" + runXp + " XP · Level " + xp
         : "Ingen XP denne gangen. Du får 1 XP for hvert " +
           TREES_PER_XP +
           ". tre.";
-    if (gameMode === "comp") xpText = "Konkurransescoren lagres på den felles topplista.";
-    if (xp >= MAX_XP && gameMode !== "comp") xpText = "Maks level (" + MAX_XP + ")! " + xpText;
+    if (gameMode === "comp")
+      xpText = "Konkurransescoren lagres på den felles topplista.";
+    if (xp >= MAX_XP && gameMode !== "comp")
+      xpText = "Maks level (" + MAX_XP + ")! " + xpText;
     if (saveNote) xpText = saveNote;
     if (runUnlocked.length)
       xpText += " Låst opp: " + runUnlocked.join(", ") + "!";
@@ -809,7 +845,8 @@
     $("endLb").hidden = gameMode !== "comp";
     $("endMenu").hidden = false;
     $("endMenu").textContent = "Meny";
-    againBtn.textContent = gameMode === "comp" ? "Spill igjen" : "Spill på nytt";
+    againBtn.textContent =
+      gameMode === "comp" ? "Spill igjen" : "Spill på nytt";
     endAt = performance.now() + 500;
     setTimeout(() => {
       if (!endEl.hidden) againBtn.focus({ preventScroll: true });
@@ -884,42 +921,105 @@
     lb.hidden = true;
     menu.hidden = false;
   }
-  $("modeNormal").addEventListener("click", () => { gameMode = "normal"; menu.hidden = true; reset(); });
-  $("modeComp").addEventListener("click", () => { menu.hidden = true; compForm.hidden = false; nameInput.focus(); });
+  $("modeNormal").addEventListener("click", () => {
+    gameMode = "normal";
+    menu.hidden = true;
+    reset();
+  });
+  $("modeComp").addEventListener("click", () => {
+    menu.hidden = true;
+    compForm.hidden = false;
+    nameInput.focus();
+  });
   $("formBack").addEventListener("click", showMenu);
   classes.forEach((klass, i) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = "chip" + (i === 0 ? " on" : ""); b.textContent = klass;
-    b.addEventListener("click", () => { selectedClass = klass; [...classBox.children].forEach(x => x.classList.toggle("on", x === b)); });
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (i === 0 ? " on" : "");
+    b.textContent = klass;
+    b.addEventListener("click", () => {
+      selectedClass = klass;
+      [...classBox.children].forEach((x) => x.classList.toggle("on", x === b));
+    });
     classBox.appendChild(b);
   });
-  nameInput.addEventListener("input", () => { compStart.disabled = !nameInput.value.trim(); });
+  nameInput.addEventListener("input", () => {
+    compStart.disabled = !nameInput.value.trim();
+  });
   $("compFormEl").addEventListener("submit", async (e) => {
-    e.preventDefault(); const name = nameInput.value.trim(); if (!name) return;
-    competitor = { name, klass: selectedClass }; gameMode = "comp"; compBest = 0;
-    try { await sessionP; const q = await post("leaderboard", {}); const me = q.data?.me; if (me) compBest = me.best || 0; } catch (_) {}
-    compForm.hidden = true; reset(); start();
+    e.preventDefault();
+    const name = nameInput.value.trim();
+    if (!name) return;
+    competitor = { name, klass: selectedClass };
+    gameMode = "comp";
+    compBest = 0;
+    try {
+      await sessionP;
+      const q = await post("leaderboard", {});
+      const me = q.data?.me;
+      if (me) compBest = me.best || 0;
+    } catch (_) {}
+    compForm.hidden = true;
+    reset();
+    start();
   });
   async function openLeaderboard(klass = null) {
-    leaderboardClass = klass; lb.hidden = false; menu.hidden = true; endEl.hidden = true;
+    leaderboardClass = klass;
+    lb.hidden = false;
+    menu.hidden = true;
+    endEl.hidden = true;
     lbRows.innerHTML = '<div class="empty">Laster toppliste …</div>';
     lbTabs.replaceChildren();
-    [null, ...classes].forEach((k) => { const b = document.createElement("button"); b.type = "button"; b.className = "chip" + (k === klass ? " on" : ""); b.textContent = k || "Alle"; b.addEventListener("click", () => openLeaderboard(k)); lbTabs.appendChild(b); });
+    [null, ...classes].forEach((k) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (k === klass ? " on" : "");
+      b.textContent = k || "Alle";
+      b.addEventListener("click", () => openLeaderboard(k));
+      lbTabs.appendChild(b);
+    });
     try {
-      const { status, data } = await post("leaderboard", klass ? { klass } : {});
+      const { status, data } = await post(
+        "leaderboard",
+        klass ? { klass } : {},
+      );
       if (status !== 200) throw Error("offline");
       const rows = data.rows || [];
-      if (!rows.length) lbRows.innerHTML = '<div class="empty">Ingen resultater ennå. Bli den første!</div>';
+      if (!rows.length)
+        lbRows.innerHTML =
+          '<div class="empty">Ingen resultater ennå. Bli den første!</div>';
       else {
         const table = document.createElement("table");
-        rows.forEach((r) => { const tr = document.createElement("tr"); if (r.me) tr.className = "me";
-          [String(r.rank), r.name + (r.me ? " (deg)" : ""), r.klass, String(r.score)].forEach((v, i) => { const td = document.createElement("td"); td.className = ["n","","k","s"][i]; td.textContent = v; tr.appendChild(td); }); table.appendChild(tr); });
+        rows.forEach((r) => {
+          const tr = document.createElement("tr");
+          if (r.me) tr.className = "me";
+          [
+            String(r.rank),
+            r.name + (r.me ? " (deg)" : ""),
+            r.klass,
+            String(r.score),
+          ].forEach((v, i) => {
+            const td = document.createElement("td");
+            td.className = ["n", "", "k", "s"][i];
+            td.textContent = v;
+            tr.appendChild(td);
+          });
+          table.appendChild(tr);
+        });
         lbRows.replaceChildren(table);
       }
-    } catch (_) { lbRows.innerHTML = '<div class="empty">Topplista kunne ikke lastes. Sjekk nettforbindelsen.</div>'; }
+    } catch (_) {
+      lbRows.innerHTML =
+        '<div class="empty">Topplista kunne ikke lastes. Sjekk nettforbindelsen.</div>';
+    }
   }
   $("menuLb").addEventListener("click", () => openLeaderboard());
   $("endLb").addEventListener("click", () => openLeaderboard());
-  $("lbClose").addEventListener("click", () => { lb.hidden = true; if (gameMode === "comp" && endShown) endEl.hidden = false; else menu.hidden = false; });
+  $("lbClose").addEventListener("click", () => {
+    lb.hidden = true;
+    if (gameMode === "comp" && endShown) endEl.hidden = false;
+    else menu.hidden = false;
+  });
   shareBtn.addEventListener("click", () => {
     const text =
       score >= GOAL
@@ -964,7 +1064,9 @@
     for (const fl of flakes) {
       fl.y += (wt.vy[0] + fl.r * wt.vy[1]) * f;
       fl.x +=
-        (Math.sin(frame * 0.02 + fl.ph) * wt.sway + wt.vx[0] + fl.r * wt.vx[1]) *
+        (Math.sin(frame * 0.02 + fl.ph) * wt.sway +
+          wt.vx[0] +
+          fl.r * wt.vx[1]) *
         f;
       if (fl.y > H + 4) {
         fl.y = -4;
@@ -1005,6 +1107,7 @@
         if (!reduce) shake = 6;
       }
     } else if (state === "landed" || state === "over") {
+      // Freeze the scenery at the collision point while the result is shown.
       eagle.rot += (2.9 - eagle.rot) * Math.min(1, 0.1 * f);
       if (state === "landed") {
         landedT += f;
@@ -1130,8 +1233,7 @@
       ctx.fillStyle = C["--snow"];
       for (const s of stars) {
         ctx.globalAlpha =
-          A.stars *
-          (reduce ? 0.45 : 0.3 + 0.3 * Math.sin(frame * 0.03 + s.p));
+          A.stars * (reduce ? 0.45 : 0.3 + 0.3 * Math.sin(frame * 0.03 + s.p));
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, 6.283);
         ctx.fill();
@@ -1261,7 +1363,10 @@
           const t = k / (v.leaves + 0.6);
           ctx.beginPath();
           ctx.ellipse(
-            x + (v.lean + sw) * t * (1 - t) * 2 + sw * 0.6 * t * t + (k % 2 ? 6 : -6),
+            x +
+              (v.lean + sw) * t * (1 - t) * 2 +
+              sw * 0.6 * t * t +
+              (k % 2 ? 6 : -6),
             v.len * t,
             6,
             2.6,
@@ -1735,7 +1840,15 @@
       } else if (wt.shape === "leaf") {
         ctx.fillStyle = fl.col;
         ctx.beginPath();
-        ctx.ellipse(fl.x, fl.y, fl.r * 1.8, fl.r, fl.ph + frame * 0.04, 0, 6.283);
+        ctx.ellipse(
+          fl.x,
+          fl.y,
+          fl.r * 1.8,
+          fl.r,
+          fl.ph + frame * 0.04,
+          0,
+          6.283,
+        );
         ctx.fill();
       } else {
         ctx.fillStyle = fl.col;
@@ -2010,7 +2123,14 @@
     ctx.fillRect(-10, 420, W + 20, GROUND - 420);
     drawFarForest((scroll * 0.5) % 800);
     if (vines.length) drawVines();
-    drawTrees();
+    // Gameplay obstacles belong to the active run, not to menu backgrounds.
+    if (
+      state === "play" ||
+      state === "dying" ||
+      state === "landed" ||
+      state === "won"
+    )
+      drawTrees();
     drawGround();
     drawFlakes();
     drawParticles();
@@ -2026,7 +2146,8 @@
 
   /* ---- loop ---- */
   reset();
-  intro.hidden = true; menu.hidden = false;
+  intro.hidden = true;
+  menu.hidden = false;
   sessionP = loadSession().then((ok) => {
     // progress from the server: show the right arena, skin and level
     if (state === "ready" && !starting) {
