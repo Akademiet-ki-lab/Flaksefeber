@@ -865,8 +865,24 @@
   $("toMenu").addEventListener("click", showMenu);
   $("endMenu").addEventListener("click", showMenu);
   function showMenu() {
-    gameMode = "normal"; competitor = null; compHud.hidden = true;
-    intro.hidden = true; endEl.hidden = true; compForm.hidden = lb.hidden = true; menu.hidden = false;
+    // Reset every overlay together so returning from competition cannot leave
+    // the end screen, form, or leaderboard underneath the main menu.
+    gameMode = "normal";
+    competitor = null;
+    endShown = false;
+    endWaiting = false;
+    starting = false;
+    state = "ready";
+    sim = null;
+    run = null;
+    compHud.hidden = true;
+    $("toMenu").hidden = true;
+    document.querySelector(".intro").classList.remove("comp");
+    intro.hidden = true;
+    endEl.hidden = true;
+    compForm.hidden = true;
+    lb.hidden = true;
+    menu.hidden = false;
   }
   $("modeNormal").addEventListener("click", () => { gameMode = "normal"; menu.hidden = true; reset(); });
   $("modeComp").addEventListener("click", () => { menu.hidden = true; compForm.hidden = false; nameInput.focus(); });
