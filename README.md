@@ -66,7 +66,7 @@ Knappen «Del score» kopierer en ferdig tekst til utklippstavlen. Hvis nettlese
 
 ## Juster vanskelighetsgraden
 
-Øverst i `script.js` ligger konstantene som styrer spillet:
+Konstantene som styrer spillet ligger i `CONST` øverst i `sim.js` (kjør `npm run sync` etterpå, så serveren får samme verdier):
 
 | Konstant              | Standard  | Betydning                                    |
 | --------------------- | --------- | -------------------------------------------- |
@@ -78,7 +78,7 @@ Knappen «Del score» kopierer en ferdig tekst til utklippstavlen. Hvis nettlese
 | `TREES_PER_XP`        | 10        | Antall trær per XP                           |
 | `MAX_XP`              | 200       | Maks level / maks XP                         |
 
-Hvor mye høyden på åpningen kan hoppe fra ett tre til neste, styres av tallet 230 i funksjonen `makeTree`. Farten øker i trinn: for hver 20. tre (20, 40, 60, 80) går ørnen raskere (`STEP_EVERY` og `STEP_BOOST`, startfart `BASE_SPEED`). Se `updatePlay`.
+Hvor mye høyden på åpningen kan hoppe fra ett tre til neste, styres av tallet 230 i funksjonen `makeTree` i `sim.js`. Farten øker i trinn: for hver 20. tre (20, 40, 60, 80) går ørnen raskere (`STEP_EVERY` og `STEP_BOOST`, startfart `BASE_SPEED`). Se `step` i `sim.js`.
 
 Fargene ligger som variabler øverst i `style.css`, og spillet leser dem derfra.
 

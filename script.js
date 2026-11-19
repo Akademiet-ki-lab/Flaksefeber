@@ -261,7 +261,7 @@
     const s = Math.max(0.2, Math.min(r.width / W, r.height / H, 1.35));
     frameEl.style.width = W * s + "px";
     frameEl.style.height = H * s + "px";
-    frameEl.style.fontSize = Math.max(13, 16 * s) + "px";
+    frameEl.style.fontSize = Math.max(11, 16 * s) + "px";
     // cap the backing-store size: very high resolutions make every frame slow
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     if (s * dpr > 2) dpr = Math.max(1, 2 / s);
@@ -311,6 +311,7 @@
     flapQueued = false,
     starting = false,
     endWaiting = false,
+    gen = 0, // bumped whenever we leave the game; stale async work checks it
     sessionP = null;
   let endShown = false,
     endAt = 0;
@@ -524,9 +525,16 @@
   }
   function updateMenu() {
     const sk = SKINS[skinIdx];
-    recordEl.textContent = isArenaUnlocked(arenaIdx)
-      ? "Din rekord er " + best + " av " + GOAL + " trær"
-      : "Klar " + GOAL + " trær i arena " + arenaUnlocked + " for å låse opp";
+    recordEl.textContent =
+      gameMode === "comp"
+        ? "Ingen grense. Hvor langt kommer du?"
+        : isArenaUnlocked(arenaIdx)
+          ? "Din rekord er " + best + " av " + GOAL + " trær"
+          : "Klar " +
+            GOAL +
+            " trær i arena " +
+            arenaUnlocked +
+            " for å låse opp";
     arenaName.textContent = A.name;
     arenaInfo.textContent = "Arena " + (arenaIdx + 1) + " av " + ARENAS.length;
     featherInfo.textContent =
@@ -637,15 +645,14 @@
     endEl.hidden = true;
     state = "ready";
     compHud.hidden = gameMode !== "comp";
-    document
-      .querySelector(".intro")
-      .classList.toggle("comp", gameMode === "comp");
+    intro.classList.toggle("comp", gameMode === "comp");
     if (gameMode === "comp") {
       menu.hidden = compForm.hidden = lb.hidden = true;
       hudName.textContent = competitor.name + " · " + competitor.klass;
       hudBest.textContent = "Beste: " + compBest;
     }
     intro.hidden = false;
+    $("toMenu").hidden = false;
     tapEl.textContent =
       best > 0 ? "Trykk for å prøve igjen" : "Trykk for å flakse";
     skinIdx = equipped;
@@ -656,6 +663,7 @@
   async function start() {
     if (starting) return;
     starting = true;
+    const myGen = gen;
     // wait for the server, then ask for a run (seed + token to verify it later)
     let seed = null,
       runToken = null;
@@ -678,6 +686,8 @@
         }
       }
     } catch (e) {}
+    // the player went back to the menu while we were waiting: drop this start
+    if (myGen !== gen) return;
     if (gameMode !== "comp" && !isUnlocked(skinIdx)) skinIdx = equipped;
     if (gameMode !== "comp" && !isArenaUnlocked(arenaIdx)) setArena(arenaEq);
     if (runToken === null) {
@@ -693,7 +703,13 @@
     bestBeaten = false;
     toast = 0;
     sim = Sim.create(seed, gameMode === "comp");
-    run = { runToken, inputs: [], frames: 0 };
+    run = {
+      runToken,
+      inputs: [],
+      frames: 0,
+      mode: gameMode,
+      who: competitor,
+    };
     acc = 0;
     flapQueued = false;
     eagle.y = sim.y;
@@ -702,6 +718,9 @@
     state = "play";
     starting = false;
     intro.hidden = true;
+    $("toMenu").hidden = true;
+    if (document.activeElement && document.activeElement.blur)
+      document.activeElement.blur(); // Space must not re-click a focused button
     flap();
   }
   function flap() {
@@ -750,6 +769,7 @@
     const r = run;
     run = null;
     if (!r || !r.runToken || !online) return;
+    const comp = r.mode === "comp";
     finishing = enqueue(async () => {
       try {
         const body = {
@@ -757,10 +777,10 @@
           inputs: r.inputs,
           frames: r.frames,
         };
-        if (gameMode === "comp") Object.assign(body, competitor);
+        if (comp) Object.assign(body, r.who);
         const { status, data } = await post("run-finish", body);
         if (status === 200 && data && data.result) {
-          if (gameMode === "comp") {
+          if (comp) {
             score = data.result.score;
             compBest = data.result.best;
             compRank = data.result.rank;
@@ -820,7 +840,9 @@
       // wait until the server has verified the run
       if (!endWaiting) {
         endWaiting = true;
+        const myGen = gen;
         finishing.then(() => {
+          if (myGen !== gen) return; // left for the menu meanwhile
           endWaiting = false;
           showEnd(kind);
         });
@@ -881,19 +903,25 @@
     reset();
   }
 
+  // true while the start screen (not the menu, form or leaderboard) is showing
+  const canStart = () => state === "ready" && !intro.hidden && !starting;
   function action() {
-    if (state === "ready") start();
-    else if (state === "play") flap();
+    if (state === "ready") {
+      if (canStart()) start();
+    } else if (state === "play") flap();
   }
 
   frameEl.addEventListener("pointerdown", (e) => {
-    if (e.target.closest("button,input")) return;
+    if (e.target.closest("button,input,label,.card,.end")) return;
     e.preventDefault();
     action();
   });
   window.addEventListener("keydown", (e) => {
     const onControl =
       e.target && e.target.closest && e.target.closest("button,input");
+    // typing in a text field must never steer the game
+    if (e.target && e.target.closest && e.target.closest("input,textarea"))
+      return;
     if (
       e.code === "Space" ||
       e.code === "ArrowUp" ||
@@ -901,7 +929,7 @@
       e.code === "Enter"
     ) {
       if (endShown) {
-        if (onControl) return;
+        if (onControl || !lb.hidden) return;
         e.preventDefault();
         if (performance.now() > endAt) restart();
         return;
@@ -913,6 +941,8 @@
     } else if (
       (e.code === "ArrowLeft" || e.code === "ArrowRight") &&
       state === "ready" &&
+      !intro.hidden &&
+      gameMode !== "comp" &&
       !endShown
     ) {
       e.preventDefault();
@@ -929,17 +959,16 @@
   function showMenu() {
     // Reset every overlay together so returning from competition cannot leave
     // the end screen, form, or leaderboard underneath the main menu.
+    gen++;
     gameMode = "normal";
     competitor = null;
     endShown = false;
     endWaiting = false;
     starting = false;
-    state = "ready";
-    sim = null;
-    run = null;
+    reset(); // eagle, trees and effects back to a clean start scene
     compHud.hidden = true;
     $("toMenu").hidden = true;
-    document.querySelector(".intro").classList.remove("comp");
+    intro.classList.remove("comp");
     intro.hidden = true;
     endEl.hidden = true;
     compForm.hidden = true;
@@ -973,20 +1002,26 @@
     compStart.disabled = !nameInput.value.trim();
     rememberCompetitor();
   });
+  let formBusy = false;
   $("compFormEl").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = nameInput.value.trim();
-    if (!name) return;
+    if (!name || formBusy) return;
+    formBusy = true;
+    const myGen = gen;
     rememberCompetitor();
-    competitor = { name, klass: selectedClass };
-    gameMode = "comp";
-    compBest = 0;
+    let best0 = 0;
     try {
       await sessionP;
       const q = await post("leaderboard", {});
       const me = q.data?.me;
-      if (me) compBest = me.best || 0;
+      if (me) best0 = me.best || 0;
     } catch (_) {}
+    formBusy = false;
+    if (myGen !== gen) return; // back to the menu while loading
+    competitor = { name, klass: selectedClass };
+    gameMode = "comp";
+    compBest = best0;
     compForm.hidden = true;
     reset();
     start();
@@ -2173,9 +2208,7 @@
   }
 
   /* ---- loop ---- */
-  reset();
-  intro.hidden = true;
-  menu.hidden = false;
+  showMenu();
   sessionP = loadSession().then((ok) => {
     // progress from the server: show the right arena, skin and level
     if (state === "ready" && !starting) {
