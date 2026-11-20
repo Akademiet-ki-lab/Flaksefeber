@@ -392,7 +392,7 @@ canvas {
   border-color: var(--red);
 }
 .link {
-  margin: 0.9em 0 6%;
+  margin: 0.9em 0 0;
   padding: 0.45em 1.1em;
   font: 800 1em var(--font-body);
   color: var(--aurora);
@@ -401,6 +401,14 @@ canvas {
   border-radius: 999px;
   cursor: pointer;
   text-shadow: 0 1px 6px rgba(14, 32, 54, 0.8);
+}
+.credit {
+  margin: 0.7em 0 3%;
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--night);
+  opacity: 0.8;
 }
 .mode:focus-visible,
 .link:focus-visible,
