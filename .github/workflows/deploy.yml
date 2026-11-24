@@ -24,6 +24,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check out deployment script
+        uses: actions/checkout@v4
+
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.1
         with:
@@ -38,6 +41,25 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload deploy script
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+        run: |
+          ssh_port_option=""
+          scp_port_option=""
+          if [[ -n "$DEPLOY_SSH_PORT" ]]; then
+            ssh_port_option="-p $DEPLOY_SSH_PORT"
+            scp_port_option="-P $DEPLOY_SSH_PORT"
+          fi
+          ssh $ssh_port_option -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+            'mkdir -p "$HOME/deploy" && chmod 700 "$HOME/deploy"'
+          scp $scp_port_option deploy/deploy.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:deploy/flaksefeber-deploy.sh"
+          ssh $ssh_port_option -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+            'chmod 700 "$HOME/deploy/flaksefeber-deploy.sh"'
 
       - name: Deploy main branch
         env:
@@ -58,5 +80,4 @@ jobs:
               . "$NVM_DIR/nvm.sh"
               nvm use --silent default
             fi
-            cd /var/www/html/flaksefeber
-            ./deploy/deploy.sh main'
+            "$HOME/deploy/flaksefeber-deploy.sh" main'
