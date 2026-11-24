@@ -76,21 +76,22 @@ if [[ -f "$TARGET_DIR/data/flaksefeber.db" ]]; then
   (cd "$TMP_DIR" && DATA_DIR="$TARGET_DIR/data" npm run -s admin -- backup)
 fi
 
+set -x
 echo "==> Kopierer til $TARGET_DIR..."
 mkdir -p "$TARGET_DIR/data"
 chmod 700 "$TARGET_DIR/data"
 
-# data/ og backup/ bevares; resten av appmappa erstattes atomisk som innhold.
-find "$TARGET_DIR" -mindepth 1 -maxdepth 1 \
-  ! -name data -exec rm -rf -- {} +
+# data/ og backup/ bevares; resten av appmappa erstattes.
+/usr/bin/find "$TARGET_DIR" -mindepth 1 -maxdepth 1 \
+  ! -name data ! -name backup -exec /usr/bin/rm -rf -- {} +
 (
   cd "$TMP_DIR"
-  tar --exclude='.git' --exclude='.git/*' --exclude='data' --exclude='data/*' \
+  /usr/bin/tar --exclude='.git' --exclude='.git/*' --exclude='data' --exclude='data/*' \
     --exclude='backup' --exclude='backup/*' --exclude='test' --exclude='test/*' \
     -cf - .
 ) | (
   cd "$TARGET_DIR"
-  tar -xf -
+  /usr/bin/tar -xf -
 )
 
 echo "==> Starter appen på nytt..."
