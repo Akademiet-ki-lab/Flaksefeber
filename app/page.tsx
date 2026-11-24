@@ -223,6 +223,16 @@ export default function Page() {
                 Har du bruker? Logg inn
               </button>
             </form>
+            <button
+              className="register-scroll"
+              id="registerScroll"
+              type="button"
+              aria-label="Rull ned for flere registreringsfelt"
+              title="Vis flere felt"
+              hidden
+            >
+              <span aria-hidden="true">&#8595;</span>
+            </button>
           </div>
 
           <button className="back menu-btn" id="toMenu" type="button" hidden>

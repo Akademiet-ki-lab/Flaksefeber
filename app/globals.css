@@ -571,8 +571,37 @@ canvas {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+#compForm #loginForm {
+  margin: auto;
+}
 #compForm .card label {
   margin-top: 0.7em;
+}
+.register-scroll {
+  position: absolute;
+  z-index: 4;
+  bottom: 0.7em;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  color: var(--beak);
+  background: rgba(14, 32, 54, 0.96);
+  border: 1px solid rgba(245, 249, 252, 0.45);
+  border-radius: 50%;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+.register-scroll span {
+  font-size: 1.6em;
+  line-height: 1;
+}
+.register-scroll:focus-visible {
+  outline: 3px solid var(--beak);
+  outline-offset: 2px;
 }
 .card .hint {
   display: block;

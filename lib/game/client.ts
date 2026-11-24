@@ -371,6 +371,7 @@ export function startGame() {
     loginPass = $<HTMLInputElement>("loginPass"),
     loginMsg = $("loginMsg"),
     registerForm = $<HTMLFormElement>("registerForm"),
+    registerScroll = $<HTMLButtonElement>("registerScroll"),
     regUser = $<HTMLInputElement>("regUser"),
     regName = $<HTMLInputElement>("regName"),
     regPass = $<HTMLInputElement>("regPass"),
@@ -1090,12 +1091,35 @@ export function startGame() {
   /* ---- competition mode: needs an account ----
      The server knows who is logged in (httpOnly cookie). Players make their own
      account; only an admin can change a password. */
+  function updateRegisterScroll() {
+    const hasMore =
+      registerForm.scrollHeight > registerForm.clientHeight + 1 &&
+      registerForm.scrollTop + registerForm.clientHeight < registerForm.scrollHeight - 2;
+    registerScroll.hidden = registerForm.hidden || !hasMore;
+  }
+  if (typeof ResizeObserver !== "undefined") {
+    const registerResizeObserver = new ResizeObserver(updateRegisterScroll);
+    registerResizeObserver.observe(registerForm);
+  }
+  registerForm.addEventListener("scroll", updateRegisterScroll, { passive: true });
+  window.addEventListener("resize", updateRegisterScroll);
+  registerScroll.addEventListener("click", () => {
+    registerForm.scrollBy({
+      top: Math.max(140, registerForm.clientHeight * 0.7),
+      behavior: "smooth",
+    });
+  });
   function showCompForm(view: "me" | "login" | "register", msg = "") {
     menu.hidden = true;
     compForm.hidden = false;
     compMe.hidden = view !== "me";
     loginForm.hidden = view !== "login";
     registerForm.hidden = view !== "register";
+    registerScroll.hidden = true;
+    if (view === "register") {
+      registerForm.scrollTop = 0;
+      requestAnimationFrame(updateRegisterScroll);
+    }
     loginMsg.textContent = view === "login" ? msg : "";
     regMsg.textContent = view === "register" ? msg : "";
     if (view === "me" && account) {

@@ -1,16 +1,5 @@
-#!/usr/bin/env bash
-# (virker også med zsh)
-# Legger ut siste versjon av Flaksefeber fra GitHub på VPS-en.
-#
-#   ./deploy.sh              legger ut main
-#   ./deploy.sh <branch>     legger ut en annen branch, f.eks. ./deploy.sh test-admin
-#
-# Kjør som brukeren som eier pm2-prosessen (IKKE med sudo; skriptet spør selv
-# om sudo der det trengs). Skriptet bygger og tester i en midlertidig mappe
-# først, så den kjørende siden røres bare hvis alt gikk bra.
-#
-# Appen startes av pm2 med ecosystem.config.cjs (første gang startes den,
-# senere lastes den inn på nytt).
+#!/bin/zsh
+
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/Akademiet-ki-lab/Flaksefeber.git}"
@@ -25,13 +14,37 @@ BRANCH="${1:-main}"
 
 TARGET_DIR="${TARGET_DIR:-/var/www/html/flaksefeber}"
 PM2_NAME="flaksefeber"
-PM2_USER="$(whoami)"                                   # brukeren som eier pm2-prosessen
 export PORT="${PORT:-49000}"                           # må stemme med proxyen (nginx/Apache)
 
 if [[ "$EUID" -eq 0 ]]; then
-  echo "Ikke kjør dette med sudo: pm2-prosessen skal eies av en vanlig bruker."
+  echo "Ikke kjør dette som root; brukeren som kjører deploy må eie appmappa og PM2-prosessen."
   exit 1
 fi
+
+if [[ ! -d "$TARGET_DIR" || ! -w "$TARGET_DIR" || ! -x "$TARGET_DIR" ]]; then
+  echo "Appmappa finnes ikke eller er ikke skrivbar: $TARGET_DIR"
+  exit 1
+fi
+
+if [[ "$(stat -c '%u' "$TARGET_DIR")" != "$(id -u)" ]]; then
+  echo "Brukeren $(id -un) må eie appmappa: $TARGET_DIR"
+  exit 1
+fi
+
+if [[ -e "$TARGET_DIR/data" ]]; then
+  if [[ ! -d "$TARGET_DIR/data" || ! -w "$TARGET_DIR/data" || ! -x "$TARGET_DIR/data" ]] \
+    || [[ "$(stat -c '%u' "$TARGET_DIR/data")" != "$(id -u)" ]]; then
+    echo "Deploybrukeren må eie og kunne skrive til $TARGET_DIR/data"
+    exit 1
+  fi
+fi
+
+for command_name in git npm pm2 rsync curl stat; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "$command_name må være installert og tilgjengelig i PATH."
+    exit 1
+  fi
+done
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT   # rydder opp også hvis noe feiler
@@ -58,23 +71,12 @@ if [[ -f "$TARGET_DIR/data/flaksefeber.db" ]]; then
 fi
 
 echo "==> Kopierer til $TARGET_DIR..."
-sudo mkdir -p "$TARGET_DIR"
+mkdir -p "$TARGET_DIR/data"
+chmod 700 "$TARGET_DIR/data"
 # data/ (databasen) er utelatt, så --delete rører den aldri
-sudo rsync -a --delete \
+rsync -a --delete \
   --exclude='.git*' --exclude='data/' --exclude='backup/' --exclude='test/' \
   "$TMP_DIR/" "$TARGET_DIR/"
-
-echo "==> Setter rettigheter..."
-sudo chown -R www-data:www-data "$TARGET_DIR"
-# rsync tar med rettighetene fra den midlertidige mappen (mktemp lager den med
-# 700), så gjør koden lesbar igjen, ellers ser ikke pm2-brukeren noen filer
-sudo chmod 755 "$TARGET_DIR"
-sudo find "$TARGET_DIR" -path "$TARGET_DIR/data" -prune -o -exec chmod u+rwX,go+rX {} +
-sudo mkdir -p "$TARGET_DIR/data"
-# Node må kunne skrive databasen og .next/cache. data/ er 700, så webserveren
-# (www-data) aldri kan lese eller servere databasen.
-sudo chown -R "$PM2_USER" "$TARGET_DIR/data" "$TARGET_DIR/.next"
-sudo chmod 700 "$TARGET_DIR/data"
 
 echo "==> Starter appen på nytt..."
 pm2 startOrReload "$TARGET_DIR/ecosystem.config.cjs" --only "$PM2_NAME" --update-env

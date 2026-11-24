@@ -127,11 +127,11 @@ En bestemt person kan fortsatt lage en robot som styrer et ekte tastatur eller e
 
 Appen ligger i `/var/www/html/flaksefeber` og kjøres av pm2 med `ecosystem.config.cjs`. Den lytter bare på `127.0.0.1:49000`, så nginx eller Apache må sende trafikken videre (se `deploy/nginx.conf`).
 
-**Første gang:** kjør `deploy/deploy.sh` (se under). Den starter appen i pm2. Kjør så én gang `pm2 startup` (og kommandoen den skriver ut), så starter appen igjen etter omstart av serveren.
+**Første gang:** opprett `/var/www/html/flaksefeber` og sørg for at deploy-/PM2-brukeren eier mappa. Kjør `deploy/deploy.sh` (se under). Den starter appen i pm2. Kjør så `pm2 startup` som samme bruker og utfør kommandoen den skriver ut, så starter appen igjen etter omstart av serveren.
 
 Annen port: `PORT=49001 ./deploy.sh`, og endre `proxy_pass` tilsvarende.
 
-**Legge ut ny versjon:** kjør `deploy/deploy.sh` som pm2-brukeren (ikke med `sudo`):
+**Legge ut ny versjon:** kjør `deploy/deploy.sh` som brukeren `flaksefeber`, som må eie appmappa og PM2-prosessen. Skriptet bruker ikke `sudo`:
 
 ```
 ./deploy.sh              # legger ut main
@@ -143,9 +143,8 @@ Skriptet:
 1. henter branchen (standard `main`) fra GitHub til en midlertidig mappe
 2. kjører `npm ci`, `npm test` og `npm run build` der. Feiler noe, stopper det før den kjørende siden røres
 3. tar backup av databasen til `data/backups/` (de 20 siste beholdes)
-4. kopierer til `/var/www/html/flaksefeber` med `rsync --delete`. `data/` røres aldri
-5. setter rettigheter: koden eies av `www-data`, mens `data/` og `.next/` eies av pm2-brukeren. `data/` har `700`, så webserveren aldri kan lese eller servere databasen
-6. starter appen med `pm2 startOrReload ecosystem.config.cjs`, kjører `pm2 save` og sjekker at siden svarer
+4. kopierer til `/var/www/html/flaksefeber` med `rsync --delete`. `data/` røres aldri og har `700`, så andre brukere (inkludert webserveren) ikke kan lese databasen
+5. starter appen med `pm2 startOrReload ecosystem.config.cjs`, kjører `pm2 save` og sjekker at siden svarer
 
 **Admin-brukere:**
 
