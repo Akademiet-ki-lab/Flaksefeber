@@ -45,7 +45,7 @@ if [[ -e "$TARGET_DIR/data" ]]; then
   fi
 fi
 
-for command_name in git npm pm2 tar curl stat; do
+for command_name in git npm pm2 rsync curl stat; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "$command_name må være installert og tilgjengelig i PATH."
     exit 1
@@ -76,23 +76,13 @@ if [[ -f "$TARGET_DIR/data/flaksefeber.db" ]]; then
   (cd "$TMP_DIR" && DATA_DIR="$TARGET_DIR/data" npm run -s admin -- backup)
 fi
 
-set -x
 echo "==> Kopierer til $TARGET_DIR..."
 mkdir -p "$TARGET_DIR/data"
 chmod 700 "$TARGET_DIR/data"
-
-# data/ og backup/ bevares; resten av appmappa erstattes.
-/usr/bin/find "$TARGET_DIR" -mindepth 1 -maxdepth 1 \
-  ! -name data ! -name backup -exec /usr/bin/rm -rf -- {} +
-(
-  cd "$TMP_DIR"
-  /usr/bin/tar --exclude='.git' --exclude='.git/*' --exclude='data' --exclude='data/*' \
-    --exclude='backup' --exclude='backup/*' --exclude='test' --exclude='test/*' \
-    -cf - .
-) | (
-  cd "$TARGET_DIR"
-  /usr/bin/tar -xf -
-)
+# data/ og backup/ bevares, så --delete rører dem aldri
+rsync -a --delete \
+  --exclude='.git*' --exclude='data/' --exclude='backup/' --exclude='test/' \
+  "$TMP_DIR/" "$TARGET_DIR/"
 
 echo "==> Starter appen på nytt..."
 pm2 startOrReload "$TARGET_DIR/ecosystem.config.cjs" --only "$PM2_NAME" --update-env
