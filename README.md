@@ -19,7 +19,7 @@ Et Flappy Bird-inspirert spill der en norsk havørn flyr gjennom snødekt gransk
 
 Det er 10 arenaer, hver med egen bakgrunn, vær og egne hindringer. Hva som venter er en overraskelse: låste arenaer vises som «???» med mørk bakgrunn til du har klart 100 trær i arenaen før.
 
-Når du klarer 100 trær i en arena, låses neste arena opp, og neste runde starter der. På startmenyen kan du bla mellom alle arenaene med pilknappene over skin-valget, men bare de du har låst opp kan spilles. Rekorden lagres per arena. Alle arenaene er definert i `lib/game/arenas.js`.
+Når du klarer 100 trær i en arena, låses neste arena opp, og neste runde starter der. På startmenyen kan du bla mellom alle arenaene med pilknappene over skin-valget, men bare de du har låst opp kan spilles. Rekorden lagres per arena. Alle arenaene er definert i `lib/game/arenas.ts`.
 
 ## Gullfjær
 
@@ -48,18 +48,18 @@ Spillet trenger kontakt med serveren for å lagre fremgang. Uten kontakt kan du 
 
 | Fil / mappe              | Innhold                                                    |
 | ------------------------ | ---------------------------------------------------------- |
-| `app/page.js`            | Sidens struktur og panelene for start og slutt             |
+| `app/page.tsx`            | Sidens struktur og panelene for start og slutt             |
 | `app/globals.css`        | Farger, typografi og layout                                |
-| `app/api/game/route.js`  | API-et nettleseren snakker med (`POST /api/game`)          |
-| `lib/game/client.js`     | Hele spillet i nettleseren: tegning, input og serverkall   |
-| `lib/game/arenas.js`     | De 10 arenaene: farger, bakgrunn, vær og trær              |
-| `lib/game/sim.js`        | Spillreglene (fysikk, trær, score), delt med serveren      |
-| `lib/server/game.js`     | Serveren: innlogging med cookie, runder, toppliste         |
-| `lib/server/admin.js`    | Admin: innlogging, legge til, endre og slette på topplista |
+| `app/api/game/route.ts`  | API-et nettleseren snakker med (`POST /api/game`)          |
+| `lib/game/client.ts`     | Hele spillet i nettleseren: tegning, input og serverkall   |
+| `lib/game/arenas.ts`     | De 10 arenaene: farger, bakgrunn, vær og trær              |
+| `lib/game/sim.ts`        | Spillreglene (fysikk, trær, score) og typene for spilltilstanden, delt med serveren      |
+| `lib/server/game.ts`     | Serveren: innlogging med cookie, runder, toppliste         |
+| `lib/server/admin.ts`    | Admin: innlogging, legge til, endre og slette på topplista |
 | `app/admin/`             | Admin-sidene (`/admin` og `/admin/login`)                  |
-| `lib/server/logic.js`    | Rene regler for score, XP og opplåsing (testes uten database) |
-| `lib/server/db.js`       | SQLite-databasen og tabellene                              |
-| `scripts/admin.js`       | Admin-brukere og topplista fra terminalen                  |
+| `lib/server/logic.ts`    | Rene regler for score, XP og opplåsing (testes uten database) |
+| `lib/server/db.ts`       | SQLite-databasen og tabellene                              |
+| `scripts/admin.ts`       | Admin-brukere og topplista fra terminalen                  |
 | `test/`                  | Tester av reglene, API-et og klienten                      |
 | `deploy/`                | `deploy.sh` (utrulling med pm2) og nginx-eksempel          |
 | `ecosystem.config.cjs`   | pm2-oppsettet                                              |
@@ -73,7 +73,7 @@ Send lenken til serveren. Knappen «Del score» kopierer en ferdig tekst til utk
 
 ## Juster vanskelighetsgraden
 
-Konstantene som styrer spillet ligger i `CONST` øverst i `lib/game/sim.js`. Nettleseren og serveren bruker samme fil, så de er alltid like:
+Konstantene som styrer spillet ligger i `CONST` øverst i `lib/game/sim.ts`. Nettleseren og serveren bruker samme fil, så de er alltid like:
 
 | Konstant              | Standard  | Betydning                                    |
 | --------------------- | --------- | -------------------------------------------- |
@@ -85,13 +85,13 @@ Konstantene som styrer spillet ligger i `CONST` øverst i `lib/game/sim.js`. Net
 | `TREES_PER_XP`        | 10        | Antall trær per XP                           |
 | `MAX_XP`              | 200       | Maks level / maks XP                         |
 
-Hvor mye høyden på åpningen kan hoppe fra ett tre til neste, styres av tallet 230 i funksjonen `makeTree` i `lib/game/sim.js`. Farten øker i trinn: for hver 20. tre (20, 40, 60, 80) går ørnen raskere (`STEP_EVERY` og `STEP_BOOST`, startfart `BASE_SPEED`). Se `step` i `lib/game/sim.js`.
+Hvor mye høyden på åpningen kan hoppe fra ett tre til neste, styres av tallet 230 i funksjonen `makeTree` i `lib/game/sim.ts`. Farten øker i trinn: for hver 20. tre (20, 40, 60, 80) går ørnen raskere (`STEP_EVERY` og `STEP_BOOST`, startfart `BASE_SPEED`). Se `step` i `lib/game/sim.ts`.
 
 Fargene ligger som variabler øverst i `app/globals.css`, og spillet leser dem derfra.
 
 ## Teknisk
 
-Next.js (App Router) med vanlig JavaScript og Canvas. Selve spillet bruker ingen biblioteker. Serveren lagrer i én SQLite-fil (`better-sqlite3`). Spillet skalerer til skjermen og fungerer med mus, tastatur og berøring.
+Next.js (App Router) med TypeScript (strict) og Canvas. Selve spillet bruker ingen biblioteker. Serveren lagrer i én SQLite-fil (`better-sqlite3`). Spillet skalerer til skjermen og fungerer med mus, tastatur og berøring.
 
 Lykke til med spillingen!
 
@@ -102,7 +102,7 @@ Hver spiller får en tilfeldig nøkkel i en `httpOnly`-cookie. JavaScript på si
 
 1. Når en runde starter, får spilleren et tilfeldig frø (`seed`) fra serveren. Frøet bestemmer hvor åpningene mellom trærne havner.
 2. Når runden er over, sender nettleseren bare hvilke bilder (steg) du flakset i. Den sender ikke score eller XP.
-3. Serveren spiller av runden med samme regler (`lib/game/sim.js`) og regner ut score, XP, rekord og opplåsing selv.
+3. Serveren spiller av runden med samme regler (`lib/game/sim.ts`) og regner ut score, XP, rekord og opplåsing selv.
 4. Runder som er raskere enn sanntid, brukt to ganger eller startet fra gammel fremgang, avvises.
 5. Forespørsler fra andre nettsider avvises (Origin-sjekk og `SameSite`-cookie), og det er grenser for hvor mange runder og nye spillere som kan lages per minutt.
 

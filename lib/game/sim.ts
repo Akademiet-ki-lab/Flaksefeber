@@ -11,6 +11,67 @@
 
   It is an ES module, so nothing ends up on `window` in the browser.
 */
+export type Tree = {
+  x: number;
+  seed: number; // used by the browser to vary how the tree is drawn
+  gapTop: number;
+  gapBottom: number;
+  scored: boolean;
+  feather: boolean; // the golden feather sits in this tree's gap
+  wT: number; // width of the top tree
+  wB: number; // width of the bottom tree
+};
+
+export type Rng = () => number;
+
+export type State = {
+  comp: boolean;
+  rng: Rng;
+  status: "play" | "dead" | "won";
+  frame: number; // steps taken so far
+  y: number;
+  vy: number;
+  speed: number;
+  score: number;
+  trees: Tree[];
+  lastGapTop: number;
+  feather: boolean; // golden feather picked up and not yet used
+  invuln: number;
+  featherDue: boolean;
+  featherSpawned: boolean;
+};
+
+export type StepEvents = {
+  scored: number;
+  xpTicks: number;
+  pickup: { x: number; y: number } | null;
+  featherUsed: boolean;
+};
+
+export type ReplayResult = {
+  score: number;
+  won: boolean;
+  dead: boolean;
+  frames: number;
+};
+
+const CLASSES = Object.freeze([
+  "1IM",
+  "2IM",
+  "1MK",
+  "2MK",
+  "3MK",
+  "1STA",
+  "2STA",
+  "3STA",
+  "1STB",
+  "2STB",
+  "3STB",
+  "Påbygg",
+  "Lærere",
+] as const);
+export type Klass = (typeof CLASSES)[number];
+
 const CONST = Object.freeze({
   W: 400,
   H: 640,
@@ -38,21 +99,7 @@ const CONST = Object.freeze({
   COMP_STEP_BOOST: 0.15,
   COMP_MAX_SPEED: 7.5, // the eagle never moves more than this far per step
   MAX_FRAMES_COMP: 108000, // technical cap for one run (30 minutes)
-  CLASSES: Object.freeze([
-    "1IM",
-    "2IM",
-    "1MK",
-    "2MK",
-    "3MK",
-    "1STA",
-    "2STA",
-    "3STA",
-    "1STB",
-    "2STB",
-    "3STB",
-    "Påbygg",
-    "Lærere",
-  ]),
+  CLASSES,
   ARENA_COUNT: 10,
   SKIN_XP: Object.freeze([0, 20, 40, 70, 100, 140, 200]),
 });
@@ -80,10 +127,10 @@ const {
   START_Y,
 } = CONST;
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 // mulberry32: small, fast, fully deterministic
-function rngFrom(seed) {
+function rngFrom(seed: number): Rng {
   let a = seed >>> 0;
   return function () {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -94,7 +141,7 @@ function rngFrom(seed) {
   };
 }
 
-function makeTree(s, x) {
+function makeTree(s: State, x: number): Tree {
   const rnd = s.rng;
   const gap = GAP_MIN + rnd() * (GAP_MAX - GAP_MIN);
   const minTop = 55,
@@ -118,7 +165,7 @@ function makeTree(s, x) {
   };
 }
 
-function hitTree(s, t) {
+function hitTree(s: State, t: Tree): boolean {
   const parts = [
     { tip: t.gapBottom, base: GROUND + 8, w: t.wB, dir: 1 },
     { tip: t.gapTop, base: -30, w: t.wT, dir: -1 },
@@ -138,8 +185,8 @@ function hitTree(s, t) {
 }
 
 // comp = competition mode (no goal, faster every COMP_STEP_EVERY trees)
-function create(seed, comp) {
-  const s = {
+function create(seed: number, comp?: boolean): State {
+  const s: State = {
     comp: !!comp,
     rng: rngFrom(seed),
     status: "play", // play | dead | won
@@ -163,8 +210,8 @@ function create(seed, comp) {
   Advance one step. `flap` = the player pressed during this step.
   Returns the events of this step (the browser uses them for effects).
 */
-function step(s, flap) {
-  const ev = { scored: 0, xpTicks: 0, pickup: null, featherUsed: false };
+function step(s: State, flap: boolean): StepEvents {
+  const ev: StepEvents = { scored: 0, xpTicks: 0, pickup: null, featherUsed: false };
   if (s.status !== "play") return ev;
   const frame = s.frame++;
   if (flap || frame === 0) s.vy = FLAP; // the first step always flaps
@@ -254,7 +301,7 @@ function step(s, flap) {
   Replay a whole run. `inputs` = ascending step numbers where the player
   flapped. Runs until the eagle dies, wins, or `frames` steps are used.
 */
-function replay(seed, inputs, frames, comp) {
+function replay(seed: number, inputs: number[], frames: number, comp?: boolean): ReplayResult {
   const s = create(seed, comp);
   const set = new Set(inputs);
   const max = Math.min(frames, comp ? CONST.MAX_FRAMES_COMP : CONST.MAX_FRAMES);

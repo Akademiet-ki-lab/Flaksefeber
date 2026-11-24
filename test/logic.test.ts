@@ -2,21 +2,21 @@ import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import Sim from "../lib/game/sim.js";
-import * as L from "../lib/server/logic.js";
+import Sim from "../lib/game/sim";
+import * as L from "../lib/server/logic";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 let n = 0;
-const t = (name, fn) => {
+const t = (name: string, fn: () => void) => {
   fn();
   n++;
   console.log("ok  " + name);
 };
 
 // simple bot: aims for the middle of the next opening
-function play(seed, maxFrames) {
+function play(seed: number, maxFrames: number) {
   const s = Sim.create(seed);
-  const inputs = [];
+  const inputs: number[] = [];
   while (s.status === "play" && s.frame < maxFrames) {
     const nx = s.trees.find((x) => x.x > 110 - 75);
     const target = nx ? nx.gapBottom - 20 : 290; // low in the opening
@@ -27,14 +27,14 @@ function play(seed, maxFrames) {
   return { inputs, frames: s.frame, s };
 }
 
-t("skin and arena data match client.js / arenas.js", () => {
-  const js = fs.readFileSync(path.join(root, "lib/game/client.js"), "utf8");
-  const skins = js.slice(js.indexOf("const SKINS = ["), js.indexOf("const ARENAS"));
+t("skin and arena data match client.ts / arenas.ts", () => {
+  const js = fs.readFileSync(path.join(root, "lib/game/client.ts"), "utf8");
+  const skins = js.slice(js.search(/const SKINS\b/), js.search(/const ARENAS\b/));
   const xps = [...skins.matchAll(/^\s{4,6}xp: (\d+)|\{ name: "[^"]+", xp: (\d+)/gm)].map(
     (m) => +(m[1] || m[2]),
   );
   assert.deepStrictEqual(xps, [...Sim.CONST.SKIN_XP]);
-  const arenas = fs.readFileSync(path.join(root, "lib/game/arenas.js"), "utf8");
+  const arenas = fs.readFileSync(path.join(root, "lib/game/arenas.ts"), "utf8");
   const names = [...arenas.matchAll(/^\s{4,8}name: "/gm)].length;
   assert.ok(names >= Sim.CONST.ARENA_COUNT, "arena count " + names);
 });
@@ -62,7 +62,12 @@ t("doing nothing dies with score 0", () => {
 });
 
 const base = () => ({ ...L.newProgress() });
-const runOf = (seed, seq, arena, ageMs) => ({
+// a run that must be accepted: fails the test otherwise, and gives the typed result
+function accepted<T extends { error?: unknown }>(o: T): Extract<T, { error?: undefined }> {
+  assert.ok(!o.error, String(o.error));
+  return o as Extract<T, { error?: undefined }>;
+}
+const runOf = (seed: number, seq: number, arena: number, ageMs: number) => ({
   seq,
   arena,
   seed,
@@ -72,8 +77,7 @@ const runOf = (seed, seq, arena, ageMs) => ({
 t("server counts score/XP from the replay only", () => {
   const live = play(99, 20000);
   const p = base();
-  const out = L.computeFinish(p, runOf(99, 0, 0, 10 * 60 * 1000), live.inputs, live.frames, Date.now());
-  assert.ok(!out.error, out.error);
+  const out = accepted(L.computeFinish(p, runOf(99, 0, 0, 10 * 60 * 1000), live.inputs, live.frames, Date.now()));
   assert.strictEqual(out.result.score, live.s.score);
   assert.strictEqual(out.next.xp, Math.floor(live.s.score / 10));
   assert.strictEqual(out.next.seq, 1);
@@ -81,13 +85,13 @@ t("server counts score/XP from the replay only", () => {
 });
 
 t("a winning run unlocks the next arena and selects it", () => {
-  let win = null;
+  let win: { seed: number; g: ReturnType<typeof play> } | null = null;
   for (let seed = 1; seed < 400 && !win; seed++) {
     const g = play(seed, 20000);
     if (g.s.status === "won") win = { seed, g };
   }
   assert.ok(win, "the test bot should win at least one seed");
-  const out = L.computeFinish(base(), runOf(win.seed, 0, 0, 10 * 60 * 1000), win.g.inputs, win.g.frames, Date.now());
+  const out = accepted(L.computeFinish(base(), runOf(win.seed, 0, 0, 10 * 60 * 1000), win.g.inputs, win.g.frames, Date.now()));
   assert.ok(out.result.won);
   assert.strictEqual(out.result.score, 100);
   assert.strictEqual(out.next.arenas, 2);
@@ -109,11 +113,10 @@ t("cheating attempts are rejected or give nothing", () => {
   assert.strictEqual(L.computeFinish(base(), runOf(5, 0, 0, old), [0.5], 100, now).error, "rejected");
   assert.strictEqual(L.computeFinish(base(), runOf(5, 0, 0, old), [], 1e9, now).error, "rejected");
   // made-up flaps for the wrong seed don't give the claimed score
-  const fake = L.computeFinish(base(), runOf(6, 0, 0, old), live.inputs, live.frames, now);
-  assert.ok(!fake.error);
+  const fake = accepted(L.computeFinish(base(), runOf(6, 0, 0, old), live.inputs, live.frames, now));
   assert.ok(fake.result.score <= 100);
   // claiming 100 trees with no flaps = dies at once
-  const idle = L.computeFinish(base(), runOf(5, 0, 0, old), [], 20000, now);
+  const idle = accepted(L.computeFinish(base(), runOf(5, 0, 0, old), [], 20000, now));
   assert.strictEqual(idle.result.score, 0);
 });
 

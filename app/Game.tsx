@@ -6,7 +6,7 @@ import { useEffect } from "react";
 // bundled as a module, so it never shows up as a global on `window`.
 export default function Game() {
   useEffect(() => {
-    import("../lib/game/client.js").then((m) => m.startGame());
+    import("../lib/game/client").then((m) => m.startGame());
   }, []);
   return null;
 }

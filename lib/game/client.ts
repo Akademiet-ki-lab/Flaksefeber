@@ -4,8 +4,139 @@
   This is an ES module that Next.js bundles. Nothing is put on `window`, so
   scripts pasted into the console can't reach the simulation or the game state.
 */
-import Sim from "./sim.js";
-import makeArenas from "./arenas.js";
+import Sim from "./sim";
+import type { State, Tree, Klass } from "./sim";
+import makeArenas from "./arenas";
+import type {
+  Arena,
+  CssTokens,
+  Forest,
+  RidgeColors,
+  FirObstacle,
+  BlobObstacle,
+  SpireObstacle,
+  Pt,
+} from "./arenas";
+
+/** Eagle colours for one skin. */
+interface Palette {
+  eagle: string;
+  dark: string;
+  belly: string;
+  head: string;
+  tail: string;
+  beak: string;
+}
+/** A skin, unlocked at `xp` XP. */
+interface Skin {
+  name: string;
+  xp: number;
+  c: Palette;
+}
+type GameMode = "normal" | "comp";
+type GameState = "ready" | "play" | "dying" | "landed" | "over" | "won";
+/** Name and class entered for competition mode. */
+interface Competitor {
+  name: string;
+  klass: Klass;
+}
+/** The run being played, sent to the server to verify. */
+interface Run {
+  runToken: string | null;
+  inputs: number[];
+  frames: number;
+  mode: GameMode;
+  who: Competitor | null;
+}
+/** Effect particle (puffs of feathers, snow ...). */
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  life: number;
+  decay: number;
+  g: number;
+  color: string;
+}
+/** One weather particle (snowflake, raindrop, leaf ...). */
+interface Flake {
+  x: number;
+  y: number;
+  r: number;
+  ph: number;
+  col: string;
+  a: number;
+}
+/** Hanging liana in the background (rainforest). */
+interface Vine {
+  x: number;
+  len: number;
+  lean: number;
+  w: number;
+  leaves: number;
+  ph: number;
+  z: number;
+  shade: boolean;
+}
+/** Shape of a mountain ridge (sum of three |sin| waves). */
+interface Ridge {
+  base: number;
+  a1: number;
+  a2: number;
+  a3: number;
+  ph1: number;
+  ph2: number;
+  ph3: number;
+}
+/** A ridge pre-drawn into an offscreen canvas. */
+interface RidgeTile {
+  top: number;
+  img: HTMLCanvasElement;
+}
+/* ---- what /api/game answers (see lib/server/game.ts) ---- */
+interface Progress {
+  bests: number[];
+  arenas: number;
+  arena: number;
+  xp: number;
+  skin: number;
+}
+interface SessionData {
+  progress: Progress;
+}
+interface RunStartData {
+  runId: string;
+  seed: number;
+}
+// normal runs get progress + {score, xpGained, newBest, unlockedArena?, allCleared?};
+// competition runs get {score, best, newBest, rank}
+interface RunFinishData {
+  progress: Progress;
+  result: {
+    score: number;
+    newBest: boolean;
+    xpGained: number;
+    unlockedArena?: boolean;
+    allCleared?: boolean;
+    best: number;
+    rank: number | null;
+  };
+}
+interface LeaderboardRow {
+  rank: number;
+  name: string;
+  klass: string;
+  score: number;
+  me: boolean;
+}
+interface LeaderboardData {
+  rows: LeaderboardRow[];
+  me: { best: number; name: string; klass: string; rank: number | null } | null;
+}
+/** EventTarget that may be an element (window and document have no closest()). */
+type MaybeElement = EventTarget & { closest?: Element["closest"] };
 
 let started = false;
 
@@ -38,12 +169,14 @@ export function startGame() {
     "orneflukt-sig",
   ];
   const reduce = !!(
-    window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches
+    // (old browsers may lack matchMedia, so it is checked first)
+    (window as Partial<Window>).matchMedia &&
+      matchMedia("(prefers-reduced-motion: reduce)").matches
   );
 
   /* ---- tokens from CSS ---- */
   const cs = getComputedStyle(document.documentElement);
-  const C = {};
+  const C: CssTokens = {};
   [
     "--night",
     "--sky-hi",
@@ -72,7 +205,7 @@ export function startGame() {
   ].forEach((n) => {
     C[n] = cs.getPropertyValue(n).trim();
   });
-  function rgba(hex, a) {
+  function rgba(hex: string, a: number) {
     const n = parseInt(hex.slice(1), 16);
     return (
       "rgba(" +
@@ -86,14 +219,14 @@ export function startGame() {
       ")"
     );
   }
-  const rnd = (i) => {
+  const rnd = (i: number) => {
     const s = Math.sin(i * 127.1 + 311.7) * 43758.5453;
     return s - Math.floor(s);
   };
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
   /* ---- skins: unlocked with XP (xp = XP needed) ---- */
-  const DEFAULT_PAL = {
+  const DEFAULT_PAL: Palette = {
     eagle: C["--eagle"],
     dark: C["--eagle-dark"],
     belly: C["--eagle-belly"],
@@ -101,7 +234,7 @@ export function startGame() {
     tail: C["--tail"],
     beak: C["--beak"],
   };
-  const LOCKED_PAL = {
+  const LOCKED_PAL: Palette = {
     eagle: "#1d3049",
     dark: "#14243a",
     belly: "#27415f",
@@ -109,7 +242,7 @@ export function startGame() {
     tail: "#2a4566",
     beak: "#2a4566",
   };
-  const SKINS = [
+  const SKINS: Skin[] = [
     { name: "Havørn", xp: 0, c: DEFAULT_PAL },
     {
       name: "Kongeørn",
@@ -186,14 +319,15 @@ export function startGame() {
   ];
 
   const ARENAS = makeArenas(C, rgba);
-  let A = ARENAS[0];
+  let A: Arena = ARENAS[0];
 
   /* ---- DOM ---- */
-  const $ = (id) => document.getElementById(id);
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
+    document.getElementById(id) as T; // every id exists in app/page.tsx
   const stage = $("stage"),
     frameEl = $("frame"),
-    canvas = $("c"),
-    ctx = canvas.getContext("2d");
+    canvas = $<HTMLCanvasElement>("c"),
+    ctx = canvas.getContext("2d")!; // a 2D context is always available for a fresh canvas
   const intro = $("intro"),
     tapEl = $("tap");
   const endEl = $("end"),
@@ -213,29 +347,31 @@ export function startGame() {
     arenaName = $("arenaName"),
     arenaInfo = $("arenaInfo"),
     featherInfo = $("featherInfo");
-  const againBtn = $("again"),
-    shareBtn = $("share"),
+  const againBtn = $<HTMLButtonElement>("again"),
+    shareBtn = $<HTMLButtonElement>("share"),
     shareMsg = $("shareMsg"),
     shareOut = $("shareOut"),
-    shareText = $("shareText");
+    shareText = $<HTMLInputElement>("shareText");
   const menu = $("menu"),
     compForm = $("compForm"),
     lb = $("lb"),
-    nameInput = $("compName"),
+    nameInput = $<HTMLInputElement>("compName"),
     classBox = $("klasser"),
-    compStart = $("compStart"),
+    compStart = $<HTMLButtonElement>("compStart"),
     lbRows = $("lbRows"),
     lbTabs = $("lbTabs"),
     compHud = $("compHud"),
     hudName = $("hudName"),
     hudBest = $("hudBest"),
     classes = Sim.CONST.CLASSES;
-  let selectedClass = classes[0],
-    gameMode = "normal",
-    competitor = null,
-    leaderboardClass = null,
+  let selectedClass: Klass = classes[0],
+    gameMode: GameMode = "normal",
+    competitor: Competitor | null = null,
+    leaderboardClass: Klass | null = null,
     compBest = 0,
-    compRank = null;
+    compRank: number | null = null;
+  const isKlass = (k: unknown): k is Klass =>
+    (classes as readonly unknown[]).includes(k);
 
   function rememberCompetitor() {
     const name = nameInput.value.trim();
@@ -248,12 +384,16 @@ export function startGame() {
     } catch (_) {}
   }
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY_COMPETITOR));
+    // JSON.parse(null) gives null, so a missing item is fine
+    const saved = JSON.parse(localStorage.getItem(KEY_COMPETITOR) as string) as {
+      name?: unknown;
+      klass?: unknown;
+    } | null;
     if (
       saved &&
       typeof saved.name === "string" &&
       saved.name.trim() &&
-      classes.includes(saved.klass)
+      isKlass(saved.klass)
     ) {
       nameInput.value = saved.name.slice(0, 20);
       selectedClass = saved.klass;
@@ -263,11 +403,11 @@ export function startGame() {
 
   let view = 1;
   let cacheDirty = true,
-    skyLayer = null,
-    glowLayer = null,
-    farTile = null,
-    nearTile = null;
-  const grads = {};
+    skyLayer: HTMLCanvasElement | null = null,
+    glowLayer: HTMLCanvasElement | null = null,
+    farTile: RidgeTile | null = null,
+    nearTile: RidgeTile | null = null;
+  const grads: Record<string, CanvasGradient> = {};
   function fit() {
     const r = stage.getBoundingClientRect();
     const s = Math.max(0.2, Math.min(r.width / W, r.height / H, 1.35));
@@ -303,13 +443,13 @@ export function startGame() {
     scale: 1,
     alpha: 1,
   };
-  let state = "ready"; // ready | play | dying | landed | over | won
+  let state: GameState = "ready"; // ready | play | dying | landed | over | won
   let score = 0,
     best = 0;
   let scroll = 0,
     frame = 0;
-  let trees = [],
-    particles = [];
+  let trees: Tree[] = [],
+    particles: Particle[] = [];
   let shake = 0,
     flash = 0,
     scorePop = 0;
@@ -317,21 +457,21 @@ export function startGame() {
     winT = 0,
     winHold = 0,
     winStartY = 290;
-  let sim = null, // the running simulation (sim.js)
-    run = null, // {runToken, inputs, frames} for the server to verify
+  let sim: State | null = null, // the running simulation (sim.js)
+    run: Run | null = null, // {runToken, inputs, frames} for the server to verify
     acc = 0, // steps owed to the simulation (it runs at a fixed 60 per second)
     flapQueued = false,
     starting = false,
     endWaiting = false,
     gen = 0, // bumped whenever we leave the game; stale async work checks it
-    sessionP = null;
+    sessionP: Promise<boolean> | null = null;
   let endShown = false,
     endAt = 0;
   let xp = 0,
     equipped = 0, // skin used in the game
     skinIdx = 0, // skin shown in the menu
     runXp = 0,
-    runUnlocked = [];
+    runUnlocked: string[] = [];
   let toast = 0, // frames left of the "feather picked up" message
     feather = false, // golden feather active in this run
     invuln = 0,
@@ -342,8 +482,8 @@ export function startGame() {
     arenaMsg = "",
     arenaToast = 0,
     bests = ARENAS.map(() => 0); // record per arena
-  let flakes = [],
-    vines = []; // random hanging lianas in the background (rainforest)
+  let flakes: Flake[] = [],
+    vines: Vine[] = []; // random hanging lianas in the background (rainforest)
 
   /* ---- progress lives on the server ----
      The player is identified by a random id in an httpOnly cookie that
@@ -352,11 +492,14 @@ export function startGame() {
      score, XP and unlocks. Editing localStorage gives nothing. */
   let online = false, // false = no server: the game can be played, nothing is saved
     saveNote = "", // shown on the end screen when something couldn't be saved
-    finishing = null; // promise while the server verifies the last run
+    finishing: Promise<void> | null = null; // promise while the server verifies the last run
   let chain = Promise.resolve(); // all server calls run one after another
-  const enqueue = (fn) => (chain = chain.then(fn, fn));
+  const enqueue = (fn: () => Promise<void>) => (chain = chain.then(fn, fn));
 
-  async function post(action, body) {
+  async function post<T>(
+    action: string,
+    body: object,
+  ): Promise<{ status: number; data: T | null }> {
     const r = await fetch("/api/game", {
       method: "POST",
       credentials: "same-origin",
@@ -364,18 +507,20 @@ export function startGame() {
       body: JSON.stringify(Object.assign({ action }, body)),
       cache: "no-store",
     });
-    let data = null;
+    let data: T | null = null;
     try {
-      data = await r.json();
+      data = (await r.json()) as T;
     } catch (e) {}
     return { status: r.status, data };
   }
-  function applyProgress(p) {
-    bests = ARENAS.map((_, i) => clamp(parseInt(p.bests[i], 10) || 0, 0, GOAL));
-    arenaUnlocked = clamp(parseInt(p.arenas, 10) || 1, 1, ARENAS.length);
-    arenaEq = parseInt(p.arena, 10) || 0;
-    xp = clamp(parseInt(p.xp, 10) || 0, 0, MAX_XP);
-    equipped = parseInt(p.skin, 10) || 0;
+  // parseInt turns its argument into a string first, so numbers are fine too
+  const toInt = parseInt as (v: unknown, radix: number) => number;
+  function applyProgress(p: Progress) {
+    bests = ARENAS.map((_, i) => clamp(toInt(p.bests[i], 10) || 0, 0, GOAL));
+    arenaUnlocked = clamp(toInt(p.arenas, 10) || 1, 1, ARENAS.length);
+    arenaEq = toInt(p.arena, 10) || 0;
+    xp = clamp(toInt(p.xp, 10) || 0, 0, MAX_XP);
+    equipped = toInt(p.skin, 10) || 0;
     if (!(equipped >= 0 && equipped < SKINS.length) || SKINS[equipped].xp > xp)
       equipped = 0;
     if (!(arenaEq >= 0 && arenaEq < arenaUnlocked)) arenaEq = 0;
@@ -386,7 +531,7 @@ export function startGame() {
       LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
     } catch (e) {}
     try {
-      const res = await post("session", {});
+      const res = await post<SessionData>("session", {});
       if (res.status === 200 && res.data && res.data.progress) {
         online = true;
         applyProgress(res.data.progress);
@@ -405,7 +550,7 @@ export function startGame() {
       } catch (e) {}
     });
   }
-  const isArenaUnlocked = (i) => i < arenaUnlocked;
+  const isArenaUnlocked = (i: number) => i < arenaUnlocked;
   function makeFlakes() {
     const w = A.weather;
     const n = reduce ? Math.round(w.n * 0.4) : w.n;
@@ -437,7 +582,7 @@ export function startGame() {
         shade: Math.random() < 0.5,
       });
   }
-  function setArena(i) {
+  function setArena(i: number) {
     arenaIdx = i;
     A = isArenaUnlocked(i) ? ARENAS[i] : ARENAS.mystery;
     best = bests[i];
@@ -446,7 +591,7 @@ export function startGame() {
     cacheDirty = true;
   }
   // locked arenas can be browsed, but their background and name stay hidden
-  function changeArena(d) {
+  function changeArena(d: number) {
     setArena((arenaIdx + d + ARENAS.length) % ARENAS.length);
     if (isArenaUnlocked(arenaIdx)) {
       arenaEq = arenaIdx;
@@ -466,7 +611,7 @@ export function startGame() {
       bestBeaten = true;
     }
   }
-  const isUnlocked = (i) => SKINS[i].xp <= xp;
+  const isUnlocked = (i: number) => SKINS[i].xp <= xp;
   function pal() {
     return isUnlocked(skinIdx) ? SKINS[skinIdx].c : LOCKED_PAL;
   }
@@ -489,7 +634,7 @@ export function startGame() {
     lvlEl.textContent = "Level " + xp + " av " + MAX_XP;
     const nextI = SKINS.findIndex((x) => x.xp > xp);
     let from = 0,
-      to = MAX_XP;
+      to: number = MAX_XP;
     if (nextI >= 0) {
       from = SKINS[nextI - 1].xp;
       to = SKINS[nextI].xp;
@@ -509,7 +654,7 @@ export function startGame() {
         : sk.name
       : "Låses opp ved level " + sk.xp;
   }
-  function changeSkin(d) {
+  function changeSkin(d: number) {
     skinIdx = (skinIdx + d + SKINS.length) % SKINS.length;
     if (isUnlocked(skinIdx)) {
       equipped = skinIdx;
@@ -525,7 +670,7 @@ export function startGame() {
     r: 0.5 + rnd(i + 200) * 1.1,
     p: rnd(i + 300) * 6,
   }));
-  const farRidge = {
+  const farRidge: Ridge = {
     base: 432,
     a1: 92,
     a2: 40,
@@ -534,7 +679,7 @@ export function startGame() {
     ph2: 1.9,
     ph3: 0.3,
   };
-  const nearRidge = {
+  const nearRidge: Ridge = {
     base: 478,
     a1: 70,
     a2: 32,
@@ -547,7 +692,14 @@ export function startGame() {
   setArena(arenaEq);
 
   /* ---- particles ---- */
-  function puff(x, y, n, color, spread, grav) {
+  function puff(
+    x: number,
+    y: number,
+    n: number,
+    color: string,
+    spread: number,
+    grav: number,
+  ) {
     for (let i = 0; i < n; i++) {
       particles.push({
         x: x + (Math.random() * 16 - 8),
@@ -595,7 +747,7 @@ export function startGame() {
     intro.classList.toggle("comp", gameMode === "comp");
     if (gameMode === "comp") {
       menu.hidden = compForm.hidden = lb.hidden = true;
-      hudName.textContent = competitor.name + " · " + competitor.klass;
+      hudName.textContent = competitor!.name + " · " + competitor!.klass; // set before entering comp mode
       hudBest.textContent = "Beste: " + compBest;
     }
     intro.hidden = false;
@@ -612,8 +764,8 @@ export function startGame() {
     starting = true;
     const myGen = gen;
     // wait for the server, then ask for a run (seed + token to verify it later)
-    let seed = null,
-      runToken = null;
+    let seed: number | null = null,
+      runToken: string | null = null;
     try {
       await sessionP;
       if (online) {
@@ -621,7 +773,7 @@ export function startGame() {
         // a locked skin/arena can only be previewed; play with the last unlocked one
         if (!isUnlocked(skinIdx)) skinIdx = equipped;
         if (!isArenaUnlocked(arenaIdx)) setArena(arenaEq);
-        const { status, data } = await post(
+        const { status, data } = await post<RunStartData>(
           "run-start",
           gameMode === "comp" ? { mode: "comp" } : { arena: arenaIdx },
         );
@@ -649,7 +801,7 @@ export function startGame() {
     runUnlocked = [];
     bestBeaten = false;
     toast = 0;
-    sim = Sim.create(seed, gameMode === "comp");
+    sim = Sim.create(seed as number, gameMode === "comp"); // from the server, or random above
     run = {
       runToken,
       inputs: [],
@@ -666,8 +818,8 @@ export function startGame() {
     starting = false;
     intro.hidden = true;
     $("toMenu").hidden = true;
-    if (document.activeElement && document.activeElement.blur)
-      document.activeElement.blur(); // Space must not re-click a focused button
+    if (document.activeElement && (document.activeElement as HTMLElement).blur)
+      (document.activeElement as HTMLElement).blur(); // Space must not re-click a focused button
     flap();
   }
   function flap() {
@@ -675,20 +827,21 @@ export function startGame() {
     eagle.energy = 1;
   }
   function syncTrees() {
-    trees = sim.trees.map((t) => Object.assign({}, t));
+    trees = sim!.trees.map((t) => Object.assign({}, t));
   }
   // one fixed step of the simulation; the server replays exactly these steps
+  // (only called while playing, when sim and run are set)
   function stepOnce() {
     const fl = flapQueued;
     flapQueued = false;
-    if (fl) run.inputs.push(sim.frame);
-    const ev = Sim.step(sim, fl);
-    scroll += sim.speed;
-    eagle.y = sim.y;
-    eagle.vy = sim.vy;
-    feather = sim.feather;
-    invuln = sim.invuln;
-    score = sim.score;
+    if (fl) run!.inputs.push(sim!.frame);
+    const ev = Sim.step(sim!, fl);
+    scroll += sim!.speed;
+    eagle.y = sim!.y;
+    eagle.vy = sim!.vy;
+    feather = sim!.feather;
+    invuln = sim!.invuln;
+    score = sim!.score;
     syncTrees();
     if (ev.scored) scorePop = 1;
     if (ev.pickup) {
@@ -706,9 +859,9 @@ export function startGame() {
       puff(eagle.x, eagle.y, 14, "#f5c542", 1.4, 0.03);
       puff(eagle.x, eagle.y, 8, "#fff3b0", 1.2, 0.03);
     }
-    if (sim.status === "play") return;
-    run.frames = sim.frame;
-    if (sim.status === "won") win();
+    if (sim!.status === "play") return;
+    run!.frames = sim!.frame;
+    if (sim!.status === "won") win();
     else die();
   }
   // sends the run to the server, which replays it and decides score, XP and unlocks
@@ -725,7 +878,7 @@ export function startGame() {
           frames: r.frames,
         };
         if (comp) Object.assign(body, r.who);
-        const { status, data } = await post("run-finish", body);
+        const { status, data } = await post<RunFinishData>("run-finish", body);
         if (status === 200 && data && data.result) {
           if (comp) {
             score = data.result.score;
@@ -782,7 +935,7 @@ export function startGame() {
     winStartY = eagle.y;
     submitRun();
   }
-  function showEnd(kind) {
+  function showEnd(kind: "won" | "over") {
     if (finishing) {
       // wait until the server has verified the run
       if (!endWaiting) {
@@ -862,16 +1015,17 @@ export function startGame() {
   // script (dispatchEvent, el.click() ...) have isTrusted === false.
   frameEl.addEventListener("pointerdown", (e) => {
     if (!e.isTrusted) return;
-    if (e.target.closest("a,button,input,label,.card,.end")) return;
+    if ((e.target as Element).closest("a,button,input,label,.card,.end")) return;
     e.preventDefault();
     action();
   });
   window.addEventListener("keydown", (e) => {
     if (!e.isTrusted) return;
+    const target = e.target as MaybeElement | null;
     const onControl =
-      e.target && e.target.closest && e.target.closest("a,button,input");
+      target && target.closest && target.closest("a,button,input");
     // typing in a text field must never steer the game
-    if (e.target && e.target.closest && e.target.closest("input,textarea"))
+    if (target && target.closest && target.closest("input,textarea"))
       return;
     if (
       e.code === "Space" ||
@@ -964,7 +1118,7 @@ export function startGame() {
     let best0 = 0;
     try {
       await sessionP;
-      const q = await post("leaderboard", {});
+      const q = await post<LeaderboardData>("leaderboard", {});
       const me = q.data?.me;
       if (me) best0 = me.best || 0;
     } catch (_) {}
@@ -977,7 +1131,7 @@ export function startGame() {
     reset();
     start();
   });
-  async function openLeaderboard(klass = null) {
+  async function openLeaderboard(klass: Klass | null = null) {
     leaderboardClass = klass;
     lb.hidden = false;
     menu.hidden = true;
@@ -993,12 +1147,12 @@ export function startGame() {
       lbTabs.appendChild(b);
     });
     try {
-      const { status, data } = await post(
+      const { status, data } = await post<LeaderboardData>(
         "leaderboard",
         klass ? { klass } : {},
       );
       if (status !== 200) throw Error("offline");
-      const rows = data.rows || [];
+      const rows = data!.rows || []; // no JSON body throws into the catch below, as before
       if (!rows.length)
         lbRows.innerHTML =
           '<div class="empty">Ingen resultater ennå. Bli den første!</div>';
@@ -1066,7 +1220,7 @@ export function startGame() {
   });
 
   /* ---- update ---- */
-  function update(f) {
+  function update(f: number) {
     frame += f;
     if (shake > 0) shake = Math.max(0, shake - 0.7 * f);
     if (flash > 0) flash = Math.max(0, flash - 0.03 * f);
@@ -1149,7 +1303,7 @@ export function startGame() {
     }
   }
 
-  function updatePlay(f) {
+  function updatePlay(f: number) {
     // the simulation runs at a fixed 60 steps per second, whatever the screen rate
     acc += f;
     for (let n = 0; acc >= 1 && state === "play" && n < 4; n++) {
@@ -1158,26 +1312,30 @@ export function startGame() {
     }
     if (state !== "play") return;
     // smooth drawing between two steps
-    eagle.y = sim.y + sim.vy * acc;
-    for (const t of trees) t.x -= sim.speed * acc;
+    eagle.y = sim!.y + sim!.vy * acc;
+    for (const t of trees) t.x -= sim!.speed * acc;
     eagle.rot +=
-      (clamp(sim.vy * 0.07, -0.5, 1.2) - eagle.rot) * Math.min(1, 0.25 * f);
+      (clamp(sim!.vy * 0.07, -0.5, 1.2) - eagle.rot) * Math.min(1, 0.25 * f);
     if (toast > 0) toast = Math.max(0, toast - f);
     if (arenaToast > 0) arenaToast = Math.max(0, arenaToast - f);
   }
 
   /* ---- drawing ---- */
   /* ---- cached layers: static scenery is drawn once, then just blitted ---- */
-  function makeLayer(w, h, draw) {
+  function makeLayer(
+    w: number,
+    h: number,
+    draw: (g: CanvasRenderingContext2D) => void,
+  ) {
     const c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(w * view));
     c.height = Math.max(1, Math.round(h * view));
-    const g = c.getContext("2d");
+    const g = c.getContext("2d")!; // always available for a fresh canvas
     g.scale(c.width / w, c.height / h);
     draw(g);
     return c;
   }
-  function ridgeTile(p, c) {
+  function ridgeTile(p: Ridge, c: RidgeColors): RidgeTile {
     const top = p.base - (p.a1 + p.a2 + p.a3);
     // 800 is the pattern period; 4 extra px let neighbouring tiles overlap (no seam)
     return {
@@ -1230,7 +1388,12 @@ export function startGame() {
     farTile = ridgeTile(farRidge, A.far);
     nearTile = ridgeTile(nearRidge, A.near);
   }
-  function vgrad(key, y0, y1, stops) {
+  function vgrad(
+    key: string,
+    y0: number,
+    y1: number,
+    stops: [number, string][],
+  ) {
     let g = grads[key];
     if (!g) {
       g = ctx.createLinearGradient(0, y0, 0, y1);
@@ -1241,7 +1404,7 @@ export function startGame() {
   }
 
   function drawSky() {
-    ctx.drawImage(skyLayer, -10, -10, W + 20, H + 20);
+    ctx.drawImage(skyLayer!, -10, -10, W + 20, H + 20); // built by buildCaches() in render()
 
     if (A.stars > 0) {
       ctx.fillStyle = C["--snow"];
@@ -1263,8 +1426,15 @@ export function startGame() {
 
     if (glowLayer) ctx.drawImage(glowLayer, 0, 0, W, H);
   }
-  function ribbon(y0, amp, k, t, color, a) {
-    const pts = [];
+  function ribbon(
+    y0: number,
+    amp: number,
+    k: number,
+    t: number,
+    color: string,
+    a: number,
+  ) {
+    const pts: Pt[] = [];
     for (let x = 0; x <= W; x += 10) {
       pts.push([
         x,
@@ -1289,7 +1459,7 @@ export function startGame() {
     ctx.fill();
   }
 
-  function ridgeY(x, p) {
+  function ridgeY(x: number, p: Ridge) {
     return (
       p.base -
       (p.a1 * (1 - Math.abs(Math.sin((Math.PI * x) / 400 + p.ph1))) +
@@ -1297,12 +1467,12 @@ export function startGame() {
         p.a3 * (1 - Math.abs(Math.sin((Math.PI * x) / 100 + p.ph3))))
     );
   }
-  function drawRidge(tile, off) {
+  function drawRidge(tile: RidgeTile, off: number) {
     const h = GROUND - tile.top;
     ctx.drawImage(tile.img, -off, tile.top, 804, h);
     ctx.drawImage(tile.img, 800 - off, tile.top, 804, h);
   }
-  function fir(x, by, h, w) {
+  function fir(x: number, by: number, h: number, w: number) {
     const Rr = [
       [0, -1],
       [0.38, -0.62],
@@ -1320,7 +1490,13 @@ export function startGame() {
     ctx.closePath();
     ctx.fill();
   }
-  function farShape(kind, x, by, h, w) {
+  function farShape(
+    kind: Forest["kind"],
+    x: number,
+    by: number,
+    h: number,
+    w: number,
+  ) {
     if (kind === "fir") fir(x, by, h, w);
     else if (kind === "round") {
       ctx.beginPath();
@@ -1343,7 +1519,7 @@ export function startGame() {
       ctx.fill();
     }
   }
-  function drawFarForest(off) {
+  function drawFarForest(off: number) {
     ctx.fillStyle = A.forest.color;
     const N = 27,
       per = 800 / N;
@@ -1393,7 +1569,14 @@ export function startGame() {
       }
     }
   }
-  function spruce(cx, tipY, baseY, w, snowy, ob) {
+  function spruce(
+    cx: number,
+    tipY: number,
+    baseY: number,
+    w: number,
+    snowy: boolean,
+    ob: FirObstacle,
+  ) {
     const h = baseY - tipY,
       trunkH = Math.min(26, h * 0.12),
       body = h - trunkH;
@@ -1434,7 +1617,13 @@ export function startGame() {
     }
   }
   // leafy tree built from stacked blobs, same cone shape as the hitbox
-  function blobTree(cx, tipY, baseY, w, ob) {
+  function blobTree(
+    cx: number,
+    tipY: number,
+    baseY: number,
+    w: number,
+    ob: BlobObstacle,
+  ) {
     const h = baseY - tipY,
       trunkH = Math.min(26, h * 0.12),
       body = h - trunkH;
@@ -1470,11 +1659,18 @@ export function startGame() {
     }
   }
   // rock spire / crystal: two facets, optional bands, cap and glowing edge
-  function spireTree(cx, tipY, baseY, w, ob, seed) {
+  function spireTree(
+    cx: number,
+    tipY: number,
+    baseY: number,
+    w: number,
+    ob: SpireObstacle,
+    seed: number,
+  ) {
     const h = baseY - tipY,
       hw = (w / 2) * 0.92;
-    const L = [],
-      Rr = [];
+    const L: Pt[] = [],
+      Rr: Pt[] = [];
     for (let k = 1; k <= 3; k++) {
       const f = k / 4;
       const y = tipY + h * f;
@@ -1524,7 +1720,7 @@ export function startGame() {
       ctx.stroke();
     }
   }
-  function poly(pts, col) {
+  function poly(pts: Pt[], col: string) {
     ctx.fillStyle = col;
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
@@ -1533,7 +1729,13 @@ export function startGame() {
     ctx.fill();
   }
   /* ---- rainforest critters (decoration only, no hitbox) ---- */
-  function monkey(x, y, sc, dir, hang) {
+  function monkey(
+    x: number,
+    y: number,
+    sc: number,
+    dir: number,
+    hang: boolean,
+  ) {
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(dir * sc, sc);
@@ -1599,10 +1801,18 @@ export function startGame() {
     }
     ctx.restore();
   }
-  function snakeAt(x0, y0, dx, dy, amp, waves, w) {
+  function snakeAt(
+    x0: number,
+    y0: number,
+    dx: number,
+    dy: number,
+    amp: number,
+    waves: number,
+    w: number,
+  ) {
     const n = 20,
       ph = frame * 0.05,
-      pts = [];
+      pts: Pt[] = [];
     // dx, dy = direction of travel; the wave is sideways to that
     const len = Math.hypot(dx, dy),
       ux = dx / len,
@@ -1663,7 +1873,7 @@ export function startGame() {
     ctx.fill();
     ctx.restore();
   }
-  function vine(ax, ay, len) {
+  function vine(ax: number, ay: number, len: number) {
     const sw = Math.sin(frame * 0.04 + ax) * 3;
     ctx.strokeStyle = "#3f8a3a";
     ctx.lineWidth = 2;
@@ -1687,7 +1897,7 @@ export function startGame() {
       ctx.fill();
     }
   }
-  function drawCritters(t) {
+  function drawCritters(t: Tree) {
     const sd = t.seed,
       cx = t.x;
     const side = sd % 2 ? 1 : -1;
@@ -1735,7 +1945,14 @@ export function startGame() {
       }
     }
   }
-  function drawObstacle(cx, tipY, baseY, w, snowy, seed) {
+  function drawObstacle(
+    cx: number,
+    tipY: number,
+    baseY: number,
+    w: number,
+    snowy: boolean,
+    seed: number,
+  ) {
     const ob = A.ob;
     if (ob.kind === "blob") blobTree(cx, tipY, baseY, w, ob);
     else if (ob.kind === "spire") spireTree(cx, tipY, baseY, w, ob, seed);
@@ -1885,7 +2102,7 @@ export function startGame() {
   }
 
   let P = DEFAULT_PAL;
-  function wingShape(th, fill, shade) {
+  function wingShape(th: number, fill: string, shade: string | null) {
     ctx.save();
     ctx.translate(4, -3);
     ctx.rotate(th);
@@ -1941,7 +2158,7 @@ export function startGame() {
     ctx.globalAlpha =
       invuln > 0 && Math.floor(frame / 4) % 2 ? e.alpha * 0.4 : e.alpha;
 
-    let th;
+    let th: number;
     if (state === "dying") th = 1.15 + 0.25 * Math.sin(frame * 0.6);
     else if (state === "landed" || state === "over") th = 0.55;
     else th = 0.2 + (0.25 + 0.75 * e.energy) * Math.sin(e.phase);
@@ -2026,7 +2243,7 @@ export function startGame() {
     ctx.restore();
   }
 
-  function drawFeather(x, y, s) {
+  function drawFeather(x: number, y: number, s: number) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(-0.6);
@@ -2128,8 +2345,9 @@ export function startGame() {
       );
 
     drawSky();
-    drawRidge(farTile, (scroll * 0.08) % 800);
-    drawRidge(nearTile, (scroll * 0.2) % 800);
+    // (both tiles are built by buildCaches() above)
+    drawRidge(farTile!, (scroll * 0.08) % 800);
+    drawRidge(nearTile!, (scroll * 0.2) % 800);
     ctx.fillStyle = vgrad("mist", 420, GROUND, [
       [0, rgba(A.mist, 0)],
       [1, rgba(A.mist, 0.6)],
@@ -2170,7 +2388,7 @@ export function startGame() {
     return ok;
   });
   let last = performance.now();
-  function loop(now) {
+  function loop(now: number) {
     const dt = Math.min(now - last, 50);
     last = now;
     update(dt / 16.667);

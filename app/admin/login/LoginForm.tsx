@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 
-const ERRORS = {
+const ERRORS: Record<string, string> = {
   wrong_login: "Feil brukernavn eller passord.",
   rate: "For mange forsøk. Vent et kvarter og prøv igjen.",
 };
@@ -11,7 +11,7 @@ export default function LoginForm() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function submit(e) {
+  async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setBusy(true);
@@ -30,8 +30,8 @@ export default function LoginForm() {
         window.location.href = "/admin";
         return;
       }
-      const data = await r.json().catch(() => ({}));
-      setError(ERRORS[data.error] || "Noe gikk galt. Prøv igjen.");
+      const data: { error?: string } = await r.json().catch(() => ({}));
+      setError((data.error && ERRORS[data.error]) || "Noe gikk galt. Prøv igjen.");
     } catch {
       setError("Fikk ikke kontakt med serveren.");
     }

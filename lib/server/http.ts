@@ -1,6 +1,6 @@
 // Small helpers shared by the API routes.
 
-export const json = (status, body, headers = {}) =>
+export const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -9,9 +9,9 @@ export const json = (status, body, headers = {}) =>
       ...headers,
     },
   });
-export const fail = (status, error) => json(status, { error });
+export const fail = (status: number, error: string) => json(status, { error });
 
-export function readCookie(req, name) {
+export function readCookie(req: Request, name: string): string | null {
   const raw = req.headers.get("cookie") || "";
   for (const part of raw.split(";")) {
     const i = part.indexOf("=");
@@ -21,7 +21,7 @@ export function readCookie(req, name) {
   return null;
 }
 
-export function isHttps(req) {
+export function isHttps(req: Request): boolean {
   if (process.env.COOKIE_SECURE === "1") return true;
   if (process.env.COOKIE_SECURE === "0") return false;
   const proto = (req.headers.get("x-forwarded-proto") || "").split(",")[0].trim();
@@ -33,7 +33,12 @@ export function isHttps(req) {
   }
 }
 
-export function cookieHeader(req, name, value, { maxAge, sameSite = "Lax" }) {
+export function cookieHeader(
+  req: Request,
+  name: string,
+  value: string,
+  { maxAge, sameSite = "Lax" }: { maxAge: number; sameSite?: "Lax" | "Strict" },
+): string {
   return [
     `${name}=${value}`,
     "Path=/",
@@ -44,7 +49,7 @@ export function cookieHeader(req, name, value, { maxAge, sameSite = "Lax" }) {
   ].join("; ");
 }
 
-export function clientIp(req) {
+export function clientIp(req: Request): string {
   // only trust proxy headers when we know a proxy (nginx/Caddy) sets them
   if (process.env.TRUST_PROXY === "1")
     return req.headers.get("x-real-ip") || "unknown";
@@ -52,8 +57,8 @@ export function clientIp(req) {
 }
 
 // small in-memory limiter: at most `max` hits per `ms` for each key
-const hits = new Map();
-export function limited(key, max, ms, { count = true } = {}) {
+const hits = new Map<string, number[]>();
+export function limited(key: string, max: number, ms: number, { count = true } = {}): boolean {
   const now = Date.now();
   const list = (hits.get(key) || []).filter((t) => now - t < ms);
   const over = list.length >= max;
@@ -62,17 +67,17 @@ export function limited(key, max, ms, { count = true } = {}) {
   if (hits.size > 10_000) hits.clear(); // never grow without bound
   return over;
 }
-export function hit(key) {
+export function hit(key: string): void {
   const list = hits.get(key) || [];
   list.push(Date.now());
   hits.set(key, list);
 }
-export function resetLimits() {
+export function resetLimits(): void {
   hits.clear();
 }
 
 // requests must come from our own page (blocks other sites posting with the cookie)
-export function sameOrigin(req) {
+export function sameOrigin(req: Request): boolean {
   const origin = req.headers.get("origin");
   if (!origin) return true; // same-origin fetches from older browsers, curl, tests
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
@@ -83,13 +88,19 @@ export function sameOrigin(req) {
   }
 }
 
-export async function readJson(req, maxBytes) {
+// a JSON object from the client: every field is unknown until checked
+export type Body = Record<string, unknown>;
+
+export async function readJson(
+  req: Request,
+  maxBytes: number,
+): Promise<{ body: Body; error?: undefined } | { body?: undefined; error: 400 | 413 }> {
   const text = await req.text();
   if (text.length > maxBytes) return { error: 413 };
   try {
-    const body = JSON.parse(text);
+    const body: unknown = JSON.parse(text);
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error();
-    return { body };
+    return { body: body as Body };
   } catch {
     return { error: 400 };
   }

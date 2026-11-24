@@ -14,14 +14,15 @@
 //   npm run admin -- backup             safe copy of the database to data/backups/ (keeps the last 20)
 import fs from "node:fs";
 import path from "node:path";
-import { openDb, dbFile } from "../lib/server/db.js";
-import { addAdmin, removeAdmin } from "../lib/server/admin.js";
+import { openDb, dbFile } from "../lib/server/db";
+import { addAdmin, removeAdmin } from "../lib/server/admin";
+import type { AdminLogRow, Count, LeaderboardRow } from "../lib/server/db";
 
 const db = openDb(dbFile());
 const [cmd, arg] = process.argv.slice(2);
 
-let piped = null;
-function pipedLines() {
+let piped: Promise<string[]> | null = null;
+function pipedLines(): Promise<string[]> {
   if (!piped)
     piped = new Promise((resolve) => {
       let buf = "";
@@ -33,20 +34,20 @@ function pipedLines() {
 }
 
 // read a line from the terminal without showing what is typed
-function askHidden(question) {
+function askHidden(question: string): Promise<string> {
   return new Promise((resolve) => {
     const { stdin, stdout } = process;
     stdout.write(question);
     if (!stdin.isTTY) {
       // piped input (e.g. from a script): one line per question
       stdout.write("\n");
-      return pipedLines().then((lines) => resolve(lines.shift() ?? ""));
+      return pipedLines().then((lines: string[]) => resolve(lines.shift() ?? ""));
     }
     let pw = "";
     stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding("utf8");
-    const onData = (ch) => {
+    const onData = (ch: string) => {
       if (ch === "\r" || ch === "\n" || ch === "\u0004") {
         stdin.setRawMode(false);
         stdin.pause();
@@ -63,13 +64,13 @@ function askHidden(question) {
   });
 }
 
-const all = (klass) =>
+const all = (klass?: string) =>
   db
     .prepare(
       `select id, name, klass, best, hidden from leaderboard
        ${klass ? "where klass = ?" : ""} order by best desc, achieved_at asc limit 50`,
     )
-    .all(...(klass ? [klass] : []));
+    .all(...(klass ? [klass] : [])) as Pick<LeaderboardRow, "id" | "name" | "klass" | "best" | "hidden">[];
 
 if (cmd === "add-user") {
   if (!arg) {
@@ -85,13 +86,13 @@ if (cmd === "add-user") {
   try {
     console.log("OK, " + addAdmin(db, arg, pw) + " kan logge inn på /admin");
   } catch (e) {
-    console.log(e.message);
+    console.log(e instanceof Error ? e.message : e);
     process.exit(1);
   }
 } else if (cmd === "remove-user") {
   console.log(removeAdmin(db, arg) ? "Fjernet" : "Fant ingen bruker " + arg);
 } else if (cmd === "users") {
-  const rows = db.prepare("select username from admins order by username").all();
+  const rows = db.prepare("select username from admins order by username").all() as { username: string }[];
   console.log(rows.length ? rows.map((r) => r.username).join("\n") : "Ingen admin-brukere ennå");
 } else if (cmd === "list") {
   for (const r of all(arg))
@@ -108,7 +109,7 @@ if (cmd === "add-user") {
     .run(cmd === "hide" ? 1 : 0, Number(arg));
   console.log(r.changes ? "OK" : "Fant ingen rad med nr " + arg);
 } else if (cmd === "log") {
-  const rows = db.prepare("select * from admin_log order by id desc limit 30").all();
+  const rows = db.prepare("select * from admin_log order by id desc limit 30").all() as AdminLogRow[];
   for (const r of rows)
     console.log(new Date(r.at).toLocaleString("nb-NO"), r.username.padEnd(12), r.action.padEnd(7), r.details);
 } else if (cmd === "backup") {
@@ -123,7 +124,7 @@ if (cmd === "add-user") {
   console.log("Backup: " + file);
 } else if (cmd === "stats") {
   for (const t of ["players", "runs", "leaderboard", "admins"])
-    console.log(t.padEnd(12), db.prepare(`select count(*) as n from ${t}`).get().n);
+    console.log(t.padEnd(12), (db.prepare(`select count(*) as n from ${t}`).get() as Count).n);
 } else {
   console.log(
     "Bruk: npm run admin -- add-user <navn> | remove-user <navn> | users | list [klasse] | hide <nr> | show <nr> | log | stats | backup",

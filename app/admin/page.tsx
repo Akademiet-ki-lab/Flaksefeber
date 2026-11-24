@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import Sim from "../../lib/game/sim.js";
-import { currentAdmin } from "./session.js";
+import Sim from "../../lib/game/sim";
+import { currentAdmin } from "./session";
 import AdminPanel from "./AdminPanel";
 
 export const dynamic = "force-dynamic";

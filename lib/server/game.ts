@@ -17,7 +17,8 @@
     leaderboard { klass? }       -> { rows, me }
 */
 import crypto from "node:crypto";
-import * as L from "./logic.js";
+import * as L from "./logic";
+import type { DB, PlayerRow, RunRow, LeaderboardRow, Count } from "./db";
 import {
   json,
   fail,
@@ -27,7 +28,7 @@ import {
   limited,
   sameOrigin,
   readJson,
-} from "./http.js";
+} from "./http";
 
 const COOKIE = "ff_player";
 const COOKIE_MAX_AGE = 5 * 365 * 86400; // seconds
@@ -35,9 +36,9 @@ const MAX_BODY = 2_000_000; // bytes; a 30-minute competition run is well below 
 const RUNS_PER_MINUTE = 30;
 const NEW_PLAYERS_PER_IP = 200; // per 10 minutes (a whole school can share one IP)
 
-const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
+const sha256 = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
-function rowToProgress(r) {
+function rowToProgress(r: PlayerRow): L.Progress {
   return {
     bests: JSON.parse(r.bests),
     arenas: r.arenas,
@@ -49,7 +50,7 @@ function rowToProgress(r) {
 }
 
 let lastCleanup = 0;
-function cleanup(db, now) {
+function cleanup(db: DB, now: number): void {
   if (now - lastCleanup < 3_600_000) return;
   lastCleanup = now;
   db.prepare("delete from runs where started_at < ?").run(now - 2 * 86_400_000);
@@ -60,12 +61,12 @@ function cleanup(db, now) {
   ).run(now - 30 * 86_400_000);
 }
 
-export async function handleGame(db, req) {
+export async function handleGame(db: DB, req: Request): Promise<Response> {
   if (req.method !== "POST") return fail(405, "method");
   if (!sameOrigin(req)) return fail(403, "origin");
 
   const { body, error } = await readJson(req, MAX_BODY);
-  if (error) return fail(error, error === 413 ? "too_large" : "bad_request");
+  if (error !== undefined) return fail(error, error === 413 ? "too_large" : "bad_request");
 
   const now = Date.now();
   cleanup(db, now);
@@ -74,9 +75,9 @@ export async function handleGame(db, req) {
   let setCookie = null;
   const token = readCookie(req, COOKIE);
   let playerId = token && /^[A-Za-z0-9_-]{43}$/.test(token) ? sha256(token) : null;
-  let row = playerId
-    ? db.prepare("select * from players where id = ?").get(playerId)
-    : null;
+  const getPlayer = (id: string) =>
+    db.prepare("select * from players where id = ?").get(id) as PlayerRow | undefined;
+  let row = playerId ? getPlayer(playerId) : undefined;
   if (!row) {
     if (limited("new:" + clientIp(req), NEW_PLAYERS_PER_IP, 600_000))
       return fail(429, "rate");
@@ -87,10 +88,10 @@ export async function handleGame(db, req) {
       `insert into players (id, bests, arenas, arena, xp, skin, seq, created_at, updated_at)
        values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(playerId, JSON.stringify(p.bests), p.arenas, p.arena, p.xp, p.skin, p.seq, now, now);
-    row = db.prepare("select * from players where id = ?").get(playerId);
+    row = getPlayer(playerId)!;
     setCookie = cookieHeader(req, COOKIE, fresh, { maxAge: COOKIE_MAX_AGE });
   }
-  const reply = (status, data) =>
+  const reply = (status: number, data: unknown) =>
     json(status, data, setCookie ? { "Set-Cookie": setCookie } : {});
   const p = rowToProgress(row);
 
@@ -117,7 +118,7 @@ export async function handleGame(db, req) {
       if (!comp && !L.canPlayArena(p, body.arena)) return reply(400, { error: "locked" });
       const { n } = db
         .prepare("select count(*) as n from runs where player_id = ? and started_at >= ?")
-        .get(playerId, now - 60_000);
+        .get(playerId, now - 60_000) as Count;
       if (n >= RUNS_PER_MINUTE) return reply(429, { error: "rate" });
       const runId = crypto.randomUUID();
       const seed = crypto.randomBytes(4).readUInt32LE(0);
@@ -133,7 +134,7 @@ export async function handleGame(db, req) {
       if (typeof body.runId !== "string") return reply(400, { error: "bad_request" });
       const run = db
         .prepare("select * from runs where id = ? and player_id = ?")
-        .get(body.runId, playerId);
+        .get(body.runId, playerId) as RunRow | undefined;
       if (!run || run.finished) return reply(409, { error: "stale" });
 
       if (run.mode === "comp") {
@@ -152,7 +153,9 @@ export async function handleGame(db, req) {
         // any other request in between
         const result = db.transaction(() => {
           db.prepare("update runs set finished = 1 where id = ?").run(run.id);
-          const lb = db.prepare("select * from leaderboard where player_id = ?").get(playerId);
+          const lb = db
+            .prepare("select * from leaderboard where player_id = ?")
+            .get(playerId) as LeaderboardRow | undefined;
           let best = score,
             achieved = now,
             newBest = score > 0,
@@ -208,22 +211,24 @@ export async function handleGame(db, req) {
 
     case "leaderboard": {
       const klass = L.isClass(body.klass) ? body.klass : null;
-      const rows = db
+      const top = db
         .prepare(
           `select player_id, name, klass, best from leaderboard
            where hidden = 0 and best > 0 ${klass ? "and klass = ?" : ""}
            order by best desc, achieved_at asc limit 50`,
         )
-        .all(...(klass ? [klass] : []))
-        .map((r, i) => ({
+        .all(...(klass ? [klass] : [])) as Pick<LeaderboardRow, "player_id" | "name" | "klass" | "best">[];
+      const rows = top.map((r, i) => ({
           rank: i + 1,
           name: r.name,
           klass: r.klass,
           score: r.best,
           me: r.player_id === playerId,
         }));
-      let me = null;
-      const mine = db.prepare("select * from leaderboard where player_id = ?").get(playerId);
+      let me: { best: number; name: string; klass: string; rank: number | null } | null = null;
+      const mine = db
+        .prepare("select * from leaderboard where player_id = ?")
+        .get(playerId) as LeaderboardRow | undefined;
       if (mine && mine.best > 0) {
         const visible = !mine.hidden && (!klass || mine.klass === klass);
         me = {
@@ -242,13 +247,13 @@ export async function handleGame(db, req) {
 }
 
 // place on the leaderboard: 1 + the number of visible players ahead of this score
-function rankOf(db, best, achievedAt, klass) {
+function rankOf(db: DB, best: number, achievedAt: number, klass: string | null): number {
   const { n } = db
     .prepare(
       `select count(*) as n from leaderboard
        where hidden = 0 and (best > ? or (best = ? and achieved_at < ?))
        ${klass ? "and klass = ?" : ""}`,
     )
-    .get(best, best, achievedAt, ...(klass ? [klass] : []));
+    .get(best, best, achievedAt, ...(klass ? [klass] : [])) as Count;
   return n + 1;
 }

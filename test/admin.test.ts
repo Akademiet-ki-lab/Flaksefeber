@@ -1,20 +1,33 @@
 // Tests the /api/admin handler against an in-memory SQLite database.
 import assert from "node:assert";
-import { openDb } from "../lib/server/db.js";
-import { handleAdmin, addAdmin, removeAdmin } from "../lib/server/admin.js";
-import { handleGame } from "../lib/server/game.js";
-import { resetLimits } from "../lib/server/http.js";
+import { openDb } from "../lib/server/db";
+import { handleAdmin, addAdmin, removeAdmin } from "../lib/server/admin";
+import { handleGame } from "../lib/server/game";
+import { resetLimits } from "../lib/server/http";
+import type { DB } from "../lib/server/db";
+
+type Opts = {
+  cookie?: string | null;
+  origin?: string;
+  type?: string | null;
+  handler?: (db: DB, req: Request) => Promise<Response>;
+};
+// the parts of a reply the tests look at
+type Reply = { status: number; data: any; setCookie: string | null; cookie: string | null }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const db = openDb(":memory:");
 let n = 0;
-const t = async (name, fn) => {
+const t = async (name: string, fn: () => unknown) => {
   await fn();
   n++;
   console.log("ok  " + name);
 };
 
-async function call(body, { cookie, origin, type = "application/json", handler = handleAdmin } = {}) {
-  const headers = { host: "spill.no" };
+async function call(
+  body: object,
+  { cookie, origin, type = "application/json", handler = handleAdmin }: Opts = {},
+): Promise<Reply> {
+  const headers: Record<string, string> = { host: "spill.no" };
   if (type) headers["content-type"] = type;
   if (cookie) headers.cookie = cookie;
   if (origin) headers.origin = origin;
@@ -28,12 +41,12 @@ async function call(body, { cookie, origin, type = "application/json", handler =
 const PW = "riktig-hest-batteri";
 const login = (username = "laerer1", password = PW) => call({ action: "login", username, password });
 
-let admin;
+let admin: string | null = null;
 await t("admin users are only added from the command line, with a strong password", async () => {
   assert.throws(() => addAdmin(db, "laerer1", "kort"), /minst 10/);
   assert.throws(() => addAdmin(db, "x", PW), /Ugyldig/);
   assert.strictEqual(addAdmin(db, "Laerer1", PW), "laerer1");
-  const row = db.prepare("select * from admins").get();
+  const row = db.prepare("select * from admins").get() as { pass_hash: string };
   assert.ok(row.pass_hash.startsWith("scrypt$") && !row.pass_hash.includes(PW));
 });
 
@@ -54,9 +67,9 @@ await t("wrong username or password is refused the same way", async () => {
 await t("right login gives a strict httpOnly cookie (username is case-insensitive)", async () => {
   const r = await login("LAERER1");
   assert.strictEqual(r.status, 200);
-  assert.match(r.setCookie, /^ff_admin=[A-Za-z0-9_-]{43}; /);
-  assert.match(r.setCookie, /HttpOnly/);
-  assert.match(r.setCookie, /SameSite=Strict/);
+  assert.match(r.setCookie ?? "", /^ff_admin=[A-Za-z0-9_-]{43}; /);
+  assert.match(r.setCookie ?? "", /HttpOnly/);
+  assert.match(r.setCookie ?? "", /SameSite=Strict/);
   admin = r.cookie;
   assert.strictEqual((await call({ action: "me" }, { cookie: admin })).data.username, "laerer1");
 });
@@ -91,7 +104,7 @@ await t("add, change and delete leaderboard rows", async () => {
 
   // the public leaderboard shows the change
   const pub = await call({ action: "leaderboard" }, { handler: handleGame });
-  assert.deepStrictEqual(pub.data.rows.map((r) => [r.name, r.score]), [["Kari N", 80]]);
+  assert.deepStrictEqual(pub.data.rows.map((r: { name: string; score: number }) => [r.name, r.score]), [["Kari N", 80]]);
 
   await call({ action: "update", id: rowId, hidden: true }, { cookie: admin });
   const hid = await call({ action: "leaderboard" }, { handler: handleGame });
@@ -102,13 +115,13 @@ await t("add, change and delete leaderboard rows", async () => {
   assert.strictEqual((await call({ action: "delete", id: rowId }, { cookie: admin })).status, 200);
   assert.strictEqual((await call({ action: "delete", id: rowId }, { cookie: admin })).status, 404);
   assert.strictEqual((await call({ action: "update", id: rowId, score: 1 }, { cookie: admin })).status, 404);
-  const logged = db.prepare("select action from admin_log where username = 'laerer1'").all().map((r) => r.action);
+  const logged = db.prepare("select action from admin_log where username = 'laerer1'").all().map((r) => (r as { action: string }).action);
   assert.deepStrictEqual(logged, ["login", "add", "update", "update", "delete"]);
 });
 
 await t("logout ends the session, and a new password ends all sessions", async () => {
   const out = await call({ action: "logout" }, { cookie: admin });
-  assert.match(out.setCookie, /Max-Age=0/);
+  assert.match(out.setCookie ?? "", /Max-Age=0/);
   assert.strictEqual((await call({ action: "me" }, { cookie: admin })).status, 401);
   const again = (await login()).cookie;
   addAdmin(db, "laerer1", "et-helt-nytt-passord");

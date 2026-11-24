@@ -64,6 +64,10 @@ sudo rsync -a --delete \
 
 echo "==> Setter rettigheter..."
 sudo chown -R www-data:www-data "$TARGET_DIR"
+# rsync tar med rettighetene fra den midlertidige mappen (mktemp lager den med
+# 700), så gjør koden lesbar igjen, ellers ser ikke pm2-brukeren noen filer
+sudo chmod 755 "$TARGET_DIR"
+sudo find "$TARGET_DIR" -path "$TARGET_DIR/data" -prune -o -exec chmod u+rwX,go+rX {} +
 sudo mkdir -p "$TARGET_DIR/data"
 # Node må kunne skrive databasen og .next/cache. data/ er 700, så webserveren
 # (www-data) aldri kan lese eller servere databasen.

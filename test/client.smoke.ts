@@ -1,45 +1,53 @@
-// Runs the real client (lib/game/client.js) with a fake browser, against the
-// real server handler (lib/server/game.js) on an in-memory database. Checks:
+// Runs the real client (lib/game/client.ts) with a fake browser, against the
+// real server handler (lib/server/game.ts) on an in-memory database. Checks:
 // login cookie, run start, play, death, server verification, end screen,
 // that editing storage gives no benefit, and that script-made input is ignored.
 import assert from "node:assert";
-import { openDb } from "../lib/server/db.js";
-import { handleGame } from "../lib/server/game.js";
+import { openDb } from "../lib/server/db";
+import { handleGame } from "../lib/server/game";
 
-const stub = new Proxy(function () {}, {
-  get: (t, k) => (k === Symbol.toPrimitive ? () => 0 : k in t ? t[k] : stub),
+/* eslint-disable @typescript-eslint/no-explicit-any -- the fake browser below is
+   deliberately loose: any property of a fake element or canvas just works */
+type Fn = (...args: any[]) => any;
+type Event = { isTrusted?: boolean; code?: string; target?: any; preventDefault?: Fn };
+type FakeEl = { id: string; hidden: boolean; textContent: string; value?: string; style: object; handlers: Record<string, Fn> };
+
+const stub: any = new Proxy(function () {}, {
+  get: (t: any, k) => (k === Symbol.toPrimitive ? () => 0 : k in t ? t[k] : stub),
   set: () => true,
   apply: () => stub,
   construct: () => stub,
 });
 
 let envCount = 0;
-async function makeEnv(opts = {}) {
+async function makeEnv(
+  opts: { storage?: Record<string, string>; cookie?: string; offline?: boolean } = {},
+) {
   const db = openDb(":memory:");
   const store = new Map(Object.entries(opts.storage || {}));
   let cookie = opts.cookie || null; // the browser's cookie jar
-  const log = [];
-  const handlers = {};
-  const els = {};
-  const el = (id) =>
-    (els[id] ||= new Proxy(
+  const log: unknown[] = [];
+  const handlers: Record<string, Fn> = {};
+  const els: Record<string, FakeEl> = {};
+  const el = (id: string): FakeEl =>
+    (els[id] ||= new Proxy<FakeEl>(
       { id, hidden: false, textContent: "", style: {}, handlers: {} },
       {
-        get(t, k) {
+        get(t: any, k) {
           if (k === "addEventListener")
-            return (ev, fn) => (t.handlers[ev] = fn);
+            return (ev: string, fn: Fn) => (t.handlers[ev] = fn);
           if (k === "getContext") return () => stub;
           if (k in t) return t[k];
           if (k === Symbol.toPrimitive) return () => 0;
           return stub;
         },
-        set(t, k, v) {
+        set(t: any, k, v) {
           t[k] = v;
           return true;
         },
       },
     ));
-  const fetch = async (url, init) => {
+  const fetch = async (url: string, init: { body?: string }) => {
     if (opts.offline) throw new TypeError("network down");
     assert.strictEqual(url, "/api/game");
     const body = JSON.parse(init.body || "{}");
@@ -59,12 +67,12 @@ async function makeEnv(opts = {}) {
     if (set) cookie = set.split(";")[0];
     return res;
   };
-  const frames = [];
+  const frames: Fn[] = [];
   let clock = 0;
-  const g = {
+  const g: Record<string, unknown> = {
     window: null,
     matchMedia: () => ({ matches: false }),
-    addEventListener: (ev, fn) => (handlers[ev] = fn),
+    addEventListener: (ev: string, fn: Fn) => (handlers[ev] = fn),
     devicePixelRatio: 1,
     document: {
       getElementById: el,
@@ -81,21 +89,21 @@ async function makeEnv(opts = {}) {
     },
     getComputedStyle: () => ({ getPropertyValue: () => "#336699" }),
     localStorage: {
-      getItem: (k) => (store.has(k) ? store.get(k) : null),
-      setItem: (k, v) => store.set(k, String(v)),
-      removeItem: (k) => store.delete(k),
+      getItem: (k: string) => (store.has(k) ? store.get(k) : null),
+      setItem: (k: string, v: unknown) => store.set(k, String(v)),
+      removeItem: (k: string) => store.delete(k),
     },
     navigator: {},
     fetch,
     performance: { now: () => clock },
-    requestAnimationFrame: (fn) => frames.push(fn),
+    requestAnimationFrame: (fn: Fn) => frames.push(fn),
     setTimeout: () => 0,
   };
   g.window = g;
   // a fresh browser: put the fakes on globalThis, then load a fresh copy of the client
   for (const [k, v] of Object.entries(g))
     Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true });
-  const client = await import("../lib/game/client.js?env=" + ++envCount);
+  const client = await import("../lib/game/client.ts?env=" + ++envCount);
   client.startGame();
   assert.ok(!("Sim" in globalThis) && !("flaksebot" in globalThis), "nothing global");
   const tick = async (n = 1) => {
@@ -106,15 +114,15 @@ async function makeEnv(opts = {}) {
       await new Promise((r) => setImmediate(r));
     }
   };
-  const players = () => db.prepare("select * from players").all();
-  return { el, tick, store, players, log, win: { handlers }, cookie: () => cookie };
+  const players = () => db.prepare("select * from players").all() as { seq: number; arenas: number; xp: number }[];
+  return { el, tick, store, players, log, win: { handlers: handlers as Record<string, (e: Event) => void> }, cookie: () => cookie };
 }
 
 (async () => {
   const env = await makeEnv();
   await env.tick(5);
   assert.strictEqual(env.players().length, 1, "got a player cookie");
-  assert.match(env.cookie(), /^ff_player=/);
+  assert.match(env.cookie() ?? "", /^ff_player=/);
   assert.ok(env.log.includes("session"));
 
   // tap to start, then tap a few times, then do nothing until dead
@@ -138,7 +146,7 @@ async function makeEnv(opts = {}) {
   env.win.handlers.keydown({
     isTrusted: true,
     code: "Space",
-    target: { closest: (sel) => (/input/.test(sel) ? {} : null) },
+    target: { closest: (sel: string) => (/input/.test(sel) ? {} : null) },
     preventDefault() {
       prevented = true;
     },

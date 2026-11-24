@@ -1,9 +1,109 @@
 /* Flaksefeber: the 10 arenas.
    Each arena describes the sky, mountains, ground, weather and obstacles.
    Arena 1 reads its colours from the CSS variables in style.css (passed in as C). */
-export default function makeArenas(C, rgba) {
+
+/** CSS custom properties read from the page, keyed by name (e.g. "--snow"). */
+export type CssTokens = Record<string, string>;
+/** Turns a "#rrggbb" colour and an alpha into an "rgba(...)" string. */
+export type Rgba = (hex: string, a: number) => string;
+/** A point as [x, y]. */
+export type Pt = [number, number];
+
+/** Colours of one mountain ridge, from the snow cap down to the fog. */
+export interface RidgeColors {
+  cap: string;
+  shade: string;
+  rock: string;
+  fog: string;
+}
+/** Soft radial light painted over the sky. */
+export interface Glow {
+  x: number;
+  y: number;
+  r: number;
+  color: string;
+  a: number;
+}
+/** Silhouettes in the far forest. */
+export interface Forest {
+  kind: "fir" | "round" | "cactus" | "spike";
+  color: string;
+}
+export interface Ground {
+  top: string;
+  shade: string;
+  near: string;
+  tuft: string;
+  kind: "grass" | "rock" | "wave";
+}
+/** Falling particles (snow, rain, leaves, dust ...). */
+export interface Weather {
+  shape: "dot" | "streak" | "leaf";
+  colors: string[];
+  n: number;
+  vy: [number, number]; // base speed, extra speed per unit of radius
+  vx: [number, number];
+  sway: number;
+  alpha: [number, number, number]; // base, extra per unit of radius, max
+}
+interface ObstacleBase {
+  body: string;
+  dark: string;
+  critters?: boolean; // monkeys, snakes and vines on the trees
+}
+/** Spruce tree, optionally with snow on the branches. */
+export interface FirObstacle extends ObstacleBase {
+  kind: "fir";
+  trunk: string;
+  snow?: string | null;
+}
+/** Leafy tree built from stacked blobs. */
+export interface BlobObstacle extends ObstacleBase {
+  kind: "blob";
+  light: string;
+  trunk?: string;
+}
+/** Rock spire / crystal. */
+export interface SpireObstacle extends ObstacleBase {
+  kind: "spire";
+  light: string;
+  bands?: string;
+  cap?: string;
+  glow?: string;
+}
+export type Obstacle = FirObstacle | BlobObstacle | SpireObstacle;
+
+/** Everything needed to draw one arena. */
+export interface Arena {
+  name: string;
+  sky: [string, string, string];
+  stars: number;
+  aurora: [string, string] | null;
+  glow: Glow | null;
+  vines?: boolean; // lianas placed at random in the background
+  deco?(g: CanvasRenderingContext2D): void;
+  far: RidgeColors;
+  near: RidgeColors;
+  mist: string;
+  forest: Forest;
+  ground: Ground;
+  weather: Weather;
+  ob: Obstacle;
+}
+/** The 10 arenas, plus the hidden stand-in for locked ones. */
+export type ArenaList = Arena[] & { mystery: Arena };
+
+export default function makeArenas(C: CssTokens, rgba: Rgba): ArenaList {
   /* ---- small drawing helpers used by the sky decorations ---- */
-  function disc(g, x, y, r, col, halo, haloA) {
+  function disc(
+    g: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    r: number,
+    col: string,
+    halo?: number,
+    haloA?: number,
+  ) {
     if (halo) {
       const gr = g.createRadialGradient(x, y, r * 0.5, x, y, halo);
       gr.addColorStop(0, rgba(col, haloA || 0.55));
@@ -18,9 +118,9 @@ export default function makeArenas(C, rgba) {
     g.arc(x, y, r, 0, 6.283);
     g.fill();
   }
-  function shadeOf(hex) {
+  function shadeOf(hex: string) {
     const n = parseInt(hex.slice(1), 16);
-    const f = (v) => Math.round(v * 0.78 + 10);
+    const f = (v: number) => Math.round(v * 0.78 + 10);
     return (
       "#" +
       [(n >> 16) & 255, (n >> 8) & 255, n & 255]
@@ -28,9 +128,9 @@ export default function makeArenas(C, rgba) {
         .join("")
     );
   }
-  function lightOf(hex) {
+  function lightOf(hex: string) {
     const n = parseInt(hex.slice(1), 16);
-    const f = (v) => Math.min(255, Math.round(v + (255 - v) * 0.4));
+    const f = (v: number) => Math.min(255, Math.round(v + (255 - v) * 0.4));
     return (
       "#" +
       [(n >> 16) & 255, (n >> 8) & 255, n & 255]
@@ -40,7 +140,14 @@ export default function makeArenas(C, rgba) {
   }
   // cartoon cloud: one solid shape (a single path and fill, so overlapping
   // parts never show through), flat rounded bottom, soft shadow and a highlight
-  function cloud(g, x, y, s, col, a) {
+  function cloud(
+    g: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    s: number,
+    col: string,
+    a: number,
+  ) {
     const k = s * 0.9,
       ox = x - 40 * k,
       oy = y;
@@ -76,7 +183,7 @@ export default function makeArenas(C, rgba) {
     g.fill();
     g.restore();
   }
-  function poly(g, pts, col) {
+  function poly(g: CanvasRenderingContext2D, pts: Pt[], col: string) {
     g.fillStyle = col;
     g.beginPath();
     g.moveTo(pts[0][0], pts[0][1]);
@@ -85,7 +192,7 @@ export default function makeArenas(C, rgba) {
     g.fill();
   }
 
-  const arenas = [
+  const arenas: Arena[] & { mystery?: Arena } = [
     /* 1. Vinterfjellet (the original) */
     {
       name: "Vinterfjellet",
@@ -711,5 +818,5 @@ export default function makeArenas(C, rgba) {
     },
     ob: { kind: "fir", body: "#12203a", dark: "#0a1220", trunk: "#0a1220" },
   };
-  return arenas;
+  return arenas as ArenaList; // mystery was set just above
 };

@@ -4,8 +4,48 @@
   The browser never sees it; it talks to /api/game.
 */
 import Database from "better-sqlite3";
+import type { Database as DB } from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+
+export type { DB };
+
+// rows as they come out of the tables (booleans are 0/1 in SQLite)
+export type PlayerRow = {
+  id: string;
+  bests: string; // JSON array
+  arenas: number;
+  arena: number;
+  xp: number;
+  skin: number;
+  seq: number;
+  created_at: number;
+  updated_at: number;
+};
+export type RunRow = {
+  id: string;
+  player_id: string;
+  seed: number;
+  seq: number;
+  arena: number;
+  mode: "normal" | "comp";
+  started_at: number;
+  finished: 0 | 1;
+};
+export type LeaderboardRow = {
+  id: number;
+  player_id: string | null;
+  name: string;
+  klass: string;
+  best: number;
+  achieved_at: number;
+  updated_at: number;
+  hidden: 0 | 1;
+};
+export type AdminRow = { username: string; pass_hash: string; created_at: number };
+export type AdminSessionRow = { id: string; username: string; expires_at: number };
+export type AdminLogRow = { id: number; username: string; action: string; details: string; at: number };
+export type Count = { n: number };
 
 const SCHEMA = `
 create table if not exists players (
@@ -67,7 +107,7 @@ create table if not exists admin_log (
 );
 `;
 
-export function openDb(file) {
+export function openDb(file: string): DB {
   if (file !== ":memory:") fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new Database(file);
   db.pragma("journal_mode = WAL");
@@ -80,8 +120,8 @@ export function openDb(file) {
 
 // older databases had player_id as the leaderboard's primary key; give the
 // table its own id so admins can add rows that don't belong to a player
-function migrate(db) {
-  const cols = db.prepare("pragma table_info(leaderboard)").all();
+function migrate(db: DB): void {
+  const cols = db.prepare("pragma table_info(leaderboard)").all() as { name: string }[];
   if (!cols.length || cols.some((c) => c.name === "id")) return;
   db.exec(`
     begin;
@@ -104,14 +144,14 @@ function migrate(db) {
   `);
 }
 
-export function dbFile() {
+export function dbFile(): string {
   const dir = process.env.DATA_DIR || path.join(process.cwd(), "data");
   return path.join(dir, "flaksefeber.db");
 }
 
 // one connection per server process (kept across hot reloads in development)
-export function getDb() {
-  const g = globalThis;
+const g = globalThis as typeof globalThis & { __flaksefeberDb?: DB };
+export function getDb(): DB {
   if (!g.__flaksefeberDb) g.__flaksefeberDb = openDb(dbFile());
   return g.__flaksefeberDb;
 }

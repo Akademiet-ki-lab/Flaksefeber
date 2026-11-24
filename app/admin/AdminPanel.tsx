@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import type { AdminLeaderboardRow } from "../../lib/server/admin";
 
-const ERRORS = {
+type Row = AdminLeaderboardRow;
+type Editing = { id: number; name: string; klass: string; score: string };
+
+const ERRORS: Record<string, string> = {
   bad_name: "Navnet må ha 1–20 tegn.",
   bad_klass: "Velg en klasse.",
   bad_score: "Score må være et helt tall fra 0 og oppover.",
   not_found: "Raden finnes ikke lenger. Lista er lastet på nytt.",
 };
 
-async function api(action, body = {}) {
+async function api<T = Record<string, never>>(action: string, body: object = {}): Promise<T> {
   const r = await fetch("/api/admin", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -21,42 +25,43 @@ async function api(action, body = {}) {
   }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || "error");
-  return data;
+  return data as T;
 }
 
-const toScore = (v) => (/^\d+$/.test(String(v).trim()) ? Number(v) : NaN);
+const toScore = (v: string) => (/^\d+$/.test(String(v).trim()) ? Number(v) : NaN);
 
-export default function AdminPanel({ username, classes }) {
-  const [rows, setRows] = useState(null);
+export default function AdminPanel({ username, classes }: { username: string; classes: string[] }) {
+  const [rows, setRows] = useState<Row[] | null>(null);
   const [klass, setKlass] = useState("");
   const [search, setSearch] = useState("");
   const [msg, setMsg] = useState({ text: "", bad: false });
-  const [editing, setEditing] = useState(null); // { id, name, klass, score }
+  const [editing, setEditing] = useState<Editing | null>(null);
   const [add, setAdd] = useState({ name: "", klass: classes[0], score: "" });
 
-  const say = (text, bad = false) => setMsg({ text, bad });
-  const oops = (e) => {
-    if (e.message !== "logged_out") say(ERRORS[e.message] || "Noe gikk galt.", true);
+  const say = (text: string, bad = false) => setMsg({ text, bad });
+  const errorOf = (e: unknown) => (e instanceof Error ? e.message : "error");
+  const oops = (e: unknown) => {
+    if (errorOf(e) !== "logged_out") say(ERRORS[errorOf(e)] || "Noe gikk galt.", true);
   };
 
   const load = useCallback(async () => {
     try {
-      const data = await api("list", klass ? { klass } : {});
+      const data = await api<{ rows: Row[] }>("list", klass ? { klass } : {});
       setRows(data.rows);
     } catch (e) {
-      if (e.message !== "logged_out") say("Klarte ikke å hente topplista.", true);
+      if (errorOf(e) !== "logged_out") say("Klarte ikke å hente topplista.", true);
     }
   }, [klass]);
   useEffect(() => {
     load();
   }, [load]);
 
-  async function addRow(e) {
+  async function addRow(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const score = toScore(add.score);
     if (Number.isNaN(score)) return say(ERRORS.bad_score, true);
     try {
-      const { row } = await api("add", { name: add.name, klass: add.klass, score });
+      const { row } = await api<{ row: Row }>("add", { name: add.name, klass: add.klass, score });
       setAdd({ ...add, name: "", score: "" });
       say(`La til ${row.name} (${row.klass}) med ${row.score} trær.`);
       load();
@@ -66,10 +71,11 @@ export default function AdminPanel({ username, classes }) {
   }
 
   async function save() {
+    if (!editing) return;
     const score = toScore(editing.score);
     if (Number.isNaN(score)) return say(ERRORS.bad_score, true);
     try {
-      const { row } = await api("update", {
+      const { row } = await api<{ row: Row }>("update", {
         id: editing.id,
         name: editing.name,
         klass: editing.klass,
@@ -80,11 +86,11 @@ export default function AdminPanel({ username, classes }) {
       load();
     } catch (err) {
       oops(err);
-      if (err.message === "not_found") load();
+      if (errorOf(err) === "not_found") load();
     }
   }
 
-  async function toggleHidden(r) {
+  async function toggleHidden(r: Row) {
     try {
       await api("update", { id: r.id, hidden: !r.hidden });
       say(r.hidden ? `${r.name} vises igjen.` : `${r.name} er skjult fra topplista.`);
@@ -94,7 +100,7 @@ export default function AdminPanel({ username, classes }) {
     }
   }
 
-  async function remove(r) {
+  async function remove(r: Row) {
     if (!window.confirm(`Slette ${r.name} (${r.klass}, ${r.score} trær)? Dette kan ikke angres.`))
       return;
     try {

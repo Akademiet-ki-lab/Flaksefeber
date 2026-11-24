@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { currentAdmin } from "../session.js";
+import { currentAdmin } from "../session";
 import LoginForm from "./LoginForm";
 
 export const dynamic = "force-dynamic";

@@ -1,19 +1,25 @@
 // Tests the real /api/game handler against an in-memory SQLite database.
 import assert from "node:assert";
-import Sim from "../lib/game/sim.js";
-import { openDb } from "../lib/server/db.js";
-import { handleGame } from "../lib/server/game.js";
+import Sim from "../lib/game/sim";
+import { openDb } from "../lib/server/db";
+import { handleGame } from "../lib/server/game";
+
+// the parts of a reply the tests look at
+type Reply = { status: number; data: any; setCookie: string | null; cookie: string | null | undefined }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const db = openDb(":memory:");
 let n = 0;
-const t = async (name, fn) => {
+const t = async (name: string, fn: () => unknown) => {
   await fn();
   n++;
   console.log("ok  " + name);
 };
 
-async function call(body, { cookie, origin, host = "spill.no" } = {}) {
-  const headers = { "Content-Type": "application/json", host };
+async function call(
+  body: object,
+  { cookie, origin, host = "spill.no" }: { cookie?: string | null; origin?: string; host?: string } = {},
+): Promise<Reply> {
+  const headers: Record<string, string> = { "Content-Type": "application/json", host };
   if (cookie) headers.cookie = cookie;
   if (origin) headers.origin = origin;
   const res = await handleGame(
@@ -34,9 +40,9 @@ async function call(body, { cookie, origin, host = "spill.no" } = {}) {
 }
 
 // simple bot: aims low in the next opening
-function play(seed, comp) {
+function play(seed: number, comp?: boolean) {
   const s = Sim.create(seed, comp);
-  const inputs = [];
+  const inputs: number[] = [];
   while (s.status === "play" && s.frame < 20000) {
     const nx = s.trees.find((x) => x.x > 110 - 75);
     const flap = s.y > (nx ? nx.gapBottom - 20 : 290);
@@ -46,16 +52,16 @@ function play(seed, comp) {
   return { inputs, frames: s.frame, score: s.score };
 }
 // pretend the run started long ago, so it passes the real-time check
-const age = (runId) =>
+const age = (runId: string) =>
   db.prepare("update runs set started_at = ? where id = ?").run(Date.now() - 20 * 60_000, runId);
 
-let me;
+let me: string | null | undefined;
 await t("a new visitor gets an httpOnly cookie and fresh progress", async () => {
   const r = await call({ action: "session" });
   assert.strictEqual(r.status, 200);
-  assert.match(r.setCookie, /^ff_player=[A-Za-z0-9_-]{43}; /);
-  assert.match(r.setCookie, /HttpOnly/);
-  assert.match(r.setCookie, /SameSite=Lax/);
+  assert.match(r.setCookie ?? "", /^ff_player=[A-Za-z0-9_-]{43}; /);
+  assert.match(r.setCookie ?? "", /HttpOnly/);
+  assert.match(r.setCookie ?? "", /SameSite=Lax/);
   assert.deepStrictEqual(r.data.progress, {
     bests: Array(10).fill(0),
     arenas: 1,
@@ -66,9 +72,9 @@ await t("a new visitor gets an httpOnly cookie and fresh progress", async () => 
   me = r.cookie;
   const again = await call({ action: "session" }, { cookie: me });
   assert.strictEqual(again.setCookie, null, "known player keeps the cookie");
-  const raw = me.split("=")[1];
+  const raw = me!.split("=")[1];
   assert.strictEqual(
-    db.prepare("select count(*) as n from players where id = ?").get(raw).n,
+    (db.prepare("select count(*) as n from players where id = ?").get(raw) as { n: number }).n,
     0,
     "the raw token is not stored",
   );
