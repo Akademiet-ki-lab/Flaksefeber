@@ -1,6 +1,32 @@
 # Flaksefeber
 
-Et Flappy Bird-inspirert spill der en norsk havørn flyr gjennom snødekt granskog. Spillet kjører i nettleseren (laget for Google Chrome). Det er en Next.js-app med egen server og database (SQLite), laget for å kjøre på en VPS.
+<p align="center">
+  <img src="app/icon.png" alt="Flaksefeber-ikon" width="180">
+</p>
+
+Et Flappy Bird-inspirert spill der en norsk havørn flyr gjennom en snødekt granskog. Spillet er laget med Next.js, React, TypeScript og Canvas. Spilleregjlene, fremgangen og konkurransescore verifiseres av serveren og lagres i SQLite.
+
+**Nytt nettsted:** [0xd3adbeef.no](https://0xd3adbeef.no)
+
+## Funksjoner
+
+- 10 arenaer med egne bakgrunner, vær og hindringer
+- 7 ørneskins som låses opp med XP
+- To spillmoduser: vanlig spill og konkurranse
+- Felles toppliste og filtrering på klasse
+- Serververifisert spill og beskyttelse mot vanlige juksmetoder
+- Lagring av arenaer, XP, skins og rekorder på serveren
+- Bevarte resultater fra den gamle topplista
+- SQLite-backup og automatisk deploy med PM2
+
+## Krav
+
+Prosjektet bruker **Node.js 25.x** lokalt, i GitHub Actions og på VPS-serveren. `better-sqlite3@13` krever Node.js 22 eller nyere, og Node 25 brukes for at alle miljøer skal være like.
+
+```bash
+node --version   # skal vise v25.x
+npm --version
+```
 
 ## Slik spiller du
 
@@ -41,39 +67,37 @@ Velg **Konkurranse** fra menyen. Konkurranse krever en bruker. Vanlig modus gjø
 
 Konkurranserunden har ingen målscore og gir ikke XP eller arenaopplåsing. Serveren kontrollerer rundene og lagrer kun brukerens beste resultat. Resultatet hører til brukeren, så det er det samme uansett hvilken PC eleven spiller på. Topplista kan vises samlet eller filtrert på klasse.
 
-Den gamle topplista fra Supabase-versjonen vises til venstre for spillet på store skjermer. Den ligger i en egen tabell som aldri endres.
+## Bevaring av gammel toppliste
 
-## Slik kjører du det
+Den gamle topplista fra Supabase-versjonen beholdes lokalt i SQLite og vises på store skjermer til venstre for spillet. Originaldataene ligger i `lib/server/legacy-leaderboard.json` og kopieres til `legacy_leaderboard` ved oppstart.
 
-Krever Node.js 20.9 eller nyere.
+Tabellen er skrivebeskyttet av SQLite-triggere. Den er derfor uavhengig av Supabase og GitHub Pages og kan ikke endres fra appen eller admin-siden.
 
-```
-npm install
-npm run dev        # utvikling på http://localhost:3000
-```
+## For kjøring og installasjon
 
-Spillet trenger kontakt med serveren for å lagre fremgang. Uten kontakt kan du spille, men ingenting lagres, og nye arenaer og skins låses ikke opp.
+Se **Lokal utvikling** for Node 25, npm-kommandoer og oppstart. Se **GitHub Actions og automatisk deploy** for produksjonsutrulling.
 
-| Fil / mappe              | Innhold                                                    |
-| ------------------------ | ---------------------------------------------------------- |
-| `app/page.tsx`            | Sidens struktur og panelene for start og slutt             |
-| `app/globals.css`        | Farger, typografi og layout                                |
-| `app/api/game/route.ts`  | API-et nettleseren snakker med (`POST /api/game`)          |
-| `lib/game/client.ts`     | Hele spillet i nettleseren: tegning, input og serverkall   |
-| `lib/game/arenas.ts`     | De 10 arenaene: farger, bakgrunn, vær og trær              |
-| `lib/game/sim.ts`        | Spillreglene (fysikk, trær, score) og typene for spilltilstanden, delt med serveren      |
-| `lib/server/game.ts`     | Serveren: innlogging med cookie, runder, toppliste         |
-| `lib/server/admin.ts`    | Admin: innlogging, legge til, endre og slette på topplista |
-| `app/admin/`             | Admin-sidene (`/admin` og `/admin/login`)                  |
-| `lib/server/logic.ts`    | Rene regler for score, XP og opplåsing (testes uten database) |
-| `lib/server/db.ts`       | SQLite-databasen og tabellene                              |
-| `scripts/admin.ts`       | Admin-brukere og topplista fra terminalen                  |
-| `test/`                  | Tester av reglene, API-et og klienten                      |
-| `deploy/`                | `deploy.sh` (utrulling med pm2) og nginx-eksempel          |
-| `ecosystem.config.cjs`   | pm2-oppsettet                                              |
-| `backup/supabase-versjon/` | Den gamle Supabase-versjonen, urørt                      |
+## Prosjektstruktur
 
-Skrifttypene (Fjalla One og Nunito Sans) hentes fra Google Fonts, så du trenger nett første gang. Uten nett brukes reserveskrifter, og spillet fungerer likevel.
+| Fil eller mappe | Innhold |
+|---|---|
+| `app/page.tsx` | Hovedside, spillflate og menyer |
+| `app/Game.tsx` | Kobler React og spillklienten sammen |
+| `app/OldLeaderboard.tsx` | Visning av gammel toppliste |
+| `app/globals.css` | Spillutseende og responsivt layout |
+| `app/api/game/route.ts` | Spill- og spiller-API |
+| `lib/game/client.ts` | Tegning, input og kommunikasjon med serveren |
+| `lib/game/arenas.ts` | Arenaer, bakgrunn, vær og hindringer |
+| `lib/game/sim.ts` | Delt spillmotor brukt av nettleser og server |
+| `lib/server/db.ts` | SQLite-schema, migrering og legacy-data |
+| `lib/server/game.ts` | Runder, fremgang, kontoer og toppliste |
+| `lib/server/admin.ts` | Administrasjon av brukere og toppliste |
+| `test/` | Spill-, API-, admin-, legacy- og klienttester |
+| `deploy/deploy.sh` | Test, build, backup, rsync og PM2-restart |
+| `.github/workflows/` | CI og automatisk VPS-deploy |
+| `ecosystem.config.cjs` | PM2-konfigurasjon for produksjon |
+
+Skrifttypene Fjalla One og Nunito Sans hentes fra Google Fonts, så de krever nett første gang. Reserveskrifter brukes uten internett.
 
 ## Del spillet
 
@@ -97,9 +121,11 @@ Hvor mye høyden på åpningen kan hoppe fra ett tre til neste, styres av tallet
 
 Fargene ligger som variabler øverst i `app/globals.css`, og spillet leser dem derfra.
 
-## Teknisk
+## Teknisk oppbygging
 
-Next.js (App Router) med TypeScript (strict) og Canvas. Selve spillet bruker ingen biblioteker. Serveren lagrer i én SQLite-fil (`better-sqlite3`). Spillet skalerer til skjermen og fungerer med mus, tastatur og berøring.
+Appen bruker Next.js App Router med TypeScript, React og Canvas. Serveren bruker én SQLite-fil gjennom `better-sqlite3`. Alle runder, fremdriftsdata, kontoer og konkurransescore verifiseres av serveren.
+
+Spillet skal skalere til mobil, nettbrett og datamaskin med mus, tastatur eller berøring.
 
 Lykke til med spillingen!
 
@@ -198,6 +224,37 @@ npm run admin -- stats          # antall spillere, runder, rader og admin-bruker
 npm run admin -- backup         # kopi av databasen til data/backups/
 ```
 
-## Fra Supabase
+## Lokal utvikling
 
-Den gamle versjonen ligger urørt i `backup/supabase-versjon/`. Spillerne var anonyme Supabase-brukere, så fremgang og toppliste blir ikke med over. Alle starter på nytt på den nye serveren.
+Prosjektet krever **Node.js 25.x** lokalt, i GitHub Actions og på VPS-serveren. `better-sqlite3@13` krever minst Node.js 22.
+
+```bash
+npm ci
+npm run dev        # http://localhost:3000
+npm test
+npm run typecheck
+npm run build
+```
+
+Bruk Node 25 for å matche produksjonsmiljøet og unngå problemer med native Node-pakker som SQLite-biblioteket.
+
+Spillet trenger kontakt med serveren for å lagre fremgang. Uten kontakt kan du spille, men fremgang og kontoer lagres ikke.
+
+## GitHub Actions og automatisk deploy
+
+Workflowene er:
+
+- `.github/workflows/ci.yml` — test, typecheck og produksjonsbuild ved push og pull request
+- `.github/workflows/deploy.yml` — deploy av `main` etter vellykket CI, eller manuelt fra Actions
+
+Legg inn følgende repository-secrets:
+
+| Secret | Verdi |
+|---|---|
+| `DEPLOY_HOST` | VPS-domene eller IP-adresse |
+| `DEPLOY_USER` | Unix-brukeren som eier appen og PM2-prosessen |
+| `DEPLOY_SSH_PORT` | Vanligvis `22` |
+| `DEPLOY_SSH_KEY` | Privat SSH-nøkkel for deploy |
+| `DEPLOY_KNOWN_HOSTS` | Vertsnøklene fra `ssh-keyscan` |
+
+Push til `main` for å starte CI og deretter mulig deploy. Du kan også starte deploy manuelt under **Actions → Deploy → Run workflow**.
