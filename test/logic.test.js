@@ -1,11 +1,11 @@
-"use strict";
-const assert = require("assert");
-const fs = require("fs");
-const path = require("path");
-const Sim = require("../sim.js");
-const L = require("../supabase/functions/game/logic.js");
+import assert from "node:assert";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import Sim from "../lib/game/sim.js";
+import * as L from "../lib/server/logic.js";
 
-const root = path.join(__dirname, "..");
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 let n = 0;
 const t = (name, fn) => {
   fn();
@@ -27,21 +27,14 @@ function play(seed, maxFrames) {
   return { inputs, frames: s.frame, s };
 }
 
-t("sim.js copy for the Edge Function is identical", () => {
-  assert.strictEqual(
-    fs.readFileSync(path.join(root, "sim.js"), "utf8"),
-    fs.readFileSync(path.join(root, "supabase/functions/game/sim.js"), "utf8"),
-  );
-});
-
-t("skin and arena data match script.js / arenas.js", () => {
-  const js = fs.readFileSync(path.join(root, "script.js"), "utf8");
+t("skin and arena data match client.js / arenas.js", () => {
+  const js = fs.readFileSync(path.join(root, "lib/game/client.js"), "utf8");
   const skins = js.slice(js.indexOf("const SKINS = ["), js.indexOf("const ARENAS"));
   const xps = [...skins.matchAll(/^\s{4,6}xp: (\d+)|\{ name: "[^"]+", xp: (\d+)/gm)].map(
     (m) => +(m[1] || m[2]),
   );
   assert.deepStrictEqual(xps, [...Sim.CONST.SKIN_XP]);
-  const arenas = fs.readFileSync(path.join(root, "arenas.js"), "utf8");
+  const arenas = fs.readFileSync(path.join(root, "lib/game/arenas.js"), "utf8");
   const names = [...arenas.matchAll(/^\s{4,8}name: "/gm)].length;
   assert.ok(names >= Sim.CONST.ARENA_COUNT, "arena count " + names);
 });

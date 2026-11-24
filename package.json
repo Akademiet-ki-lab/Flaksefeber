@@ -1,11 +1,20 @@
 {
   "name": "flaksefeber",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "Flaksefeber: spill der Supabase verifiserer fremgangen",
+  "type": "module",
+  "description": "Flaksefeber: spill der serveren verifiserer fremgangen",
   "scripts": {
-    "sync": "cp sim.js supabase/functions/game/sim.js",
-    "test": "node test/logic.test.js && node test/client.smoke.js",
-    "deploy": "npm run sync && npm test && npx supabase db push --linked && npx supabase functions deploy game"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "TRUST_PROXY=${TRUST_PROXY:-1} next start -H 127.0.0.1 -p ${PORT:-49000}",
+    "test": "node test/logic.test.js && node test/api.test.js && node test/admin.test.js && node test/client.smoke.js",
+    "admin": "node scripts/admin.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.2.0",
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }
