@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Legger ut siste versjon av Flaksefeber fra GitHub på VPS-en.
 #
-#   ./deploy.sh
+#   ./deploy.sh              legger ut main
+#   ./deploy.sh <branch>     legger ut en annen branch, f.eks. ./deploy.sh test-admin
 #
 # Kjør som brukeren som eier pm2-prosessen (IKKE med sudo; skriptet spør selv
 # om sudo der det trengs). Skriptet bygger og tester i en midlertidig mappe
@@ -15,7 +16,11 @@ REPO_URL="${REPO_URL:-https://github.com/Akademiet-ki-lab/Flaksefeber.git}"
 # Privat repo med deploy key: bruk disse to linjene i stedet for REPO_URL over
 # REPO_URL="git@github.com:Akademiet-ki-lab/Flaksefeber.git"
 # export GIT_SSH_COMMAND="ssh -i ~/.ssh/flaksefeber_deploy -o IdentitiesOnly=yes"
-BRANCH="main"
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  echo "Bruk: $0 [branch]   (standard: main)"
+  exit 0
+fi
+BRANCH="${1:-main}"
 
 TARGET_DIR="${TARGET_DIR:-/var/www/html/flaksefeber}"
 PM2_NAME="flaksefeber"
@@ -31,10 +36,11 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT   # rydder opp også hvis noe feiler
 
 echo "==> Henter $BRANCH fra GitHub..."
-git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TMP_DIR"
+git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TMP_DIR" \
+  || { echo "Fant ikke branchen \"$BRANCH\" i $REPO_URL"; exit 1; }
 [[ -f "$TMP_DIR/ecosystem.config.cjs" && -f "$TMP_DIR/next.config.js" ]] \
   || { echo "Fant ikke ecosystem.config.cjs / next.config.js i repoet"; exit 1; }
-echo "    Versjon: $(git -C "$TMP_DIR" log -1 --format='%h %s')"
+echo "    Branch: $BRANCH, versjon: $(git -C "$TMP_DIR" log -1 --format='%h %s')"
 
 echo "==> Installerer, tester og bygger (i midlertidig mappe)..."
 (

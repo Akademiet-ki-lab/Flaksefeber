@@ -123,9 +123,16 @@ Appen ligger i `/var/www/html/flaksefeber` og kjøres av pm2 med `ecosystem.conf
 
 Annen port: `PORT=49001 ./deploy.sh`, og endre `proxy_pass` tilsvarende.
 
-**Legge ut ny versjon:** kjør `deploy/deploy.sh` som pm2-brukeren (ikke med `sudo`). Skriptet:
+**Legge ut ny versjon:** kjør `deploy/deploy.sh` som pm2-brukeren (ikke med `sudo`):
 
-1. henter `main` fra GitHub til en midlertidig mappe
+```
+./deploy.sh              # legger ut main
+./deploy.sh <branch>     # legger ut en annen branch
+```
+
+Skriptet:
+
+1. henter branchen (standard `main`) fra GitHub til en midlertidig mappe
 2. kjører `npm ci`, `npm test` og `npm run build` der. Feiler noe, stopper det før den kjørende siden røres
 3. tar backup av databasen til `data/backups/` (de 20 siste beholdes)
 4. kopierer til `/var/www/html/flaksefeber` med `rsync --delete`. `data/` røres aldri
