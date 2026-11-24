@@ -1,6 +1,6 @@
 import Game from "./Game";
 import OldLeaderboard from "./OldLeaderboard";
-import { getDb, legacyLeaderboard, legacyFetchedAt } from "../lib/server/db";
+import { databaseVersion, getDb, legacyLeaderboard, legacyFetchedAt } from "../lib/server/db";
 
 // reads the old leaderboard from the database on each visit
 export const dynamic = "force-dynamic";
@@ -300,6 +300,9 @@ export default function Page() {
           </div>
         </div>
         <Game />
+      </div>
+      <div className="database-version" title="Databaseversjon">
+        DB {databaseVersion()}
       </div>
     </div>
   );

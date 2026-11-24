@@ -79,6 +79,11 @@ fi
 echo "==> Kopierer til $TARGET_DIR..."
 mkdir -p "$TARGET_DIR/data"
 chmod 700 "$TARGET_DIR/data"
+DATABASE_VERSION="$(od -An -N2 -tu2 /dev/urandom | tr -d ' ' | awk '{printf "%04d", ($1 % 10000)}')-$(date '+%H%M')-$(date '+%y%m%d')"
+printf '%s\n' "$DATABASE_VERSION" > "$TARGET_DIR/data/database-version.txt"
+chmod 600 "$TARGET_DIR/data/database-version.txt"
+echo "==> Databaseversjon: $DATABASE_VERSION"
+
 # data/ og backup/ bevares, så --delete rører dem aldri
 rsync -a --delete \
   --exclude='.git*' --exclude='data/' --exclude='backup/' --exclude='test/' \
