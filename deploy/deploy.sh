@@ -45,7 +45,7 @@ if [[ -e "$TARGET_DIR/data" ]]; then
   fi
 fi
 
-for command_name in git npm pm2 rsync curl stat; do
+for command_name in git npm pm2 tar curl stat; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "$command_name må være installert og tilgjengelig i PATH."
     exit 1
@@ -79,10 +79,19 @@ fi
 echo "==> Kopierer til $TARGET_DIR..."
 mkdir -p "$TARGET_DIR/data"
 chmod 700 "$TARGET_DIR/data"
-# data/ (databasen) er utelatt, så --delete rører den aldri
-rsync -a --delete \
-  --exclude='.git*' --exclude='data/' --exclude='backup/' --exclude='test/' \
-  "$TMP_DIR/" "$TARGET_DIR/"
+
+# data/ og backup/ bevares; resten av appmappa erstattes atomisk som innhold.
+find "$TARGET_DIR" -mindepth 1 -maxdepth 1 \
+  ! -name data -exec rm -rf -- {} +
+(
+  cd "$TMP_DIR"
+  tar --exclude='.git' --exclude='.git/*' --exclude='data' --exclude='data/*' \
+    --exclude='backup' --exclude='backup/*' --exclude='test' --exclude='test/*' \
+    -cf - .
+) | (
+  cd "$TARGET_DIR"
+  tar -xf -
+)
 
 echo "==> Starter appen på nytt..."
 pm2 startOrReload "$TARGET_DIR/ecosystem.config.cjs" --only "$PM2_NAME" --update-env
