@@ -8,7 +8,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "TRUST_PROXY=${TRUST_PROXY:-1} next start -H 127.0.0.1 -p ${PORT:-49000}",
-    "test": "tsx test/logic.test.ts && tsx test/api.test.ts && tsx test/admin.test.ts && tsx test/client.smoke.ts",
+    "test": "tsx test/logic.test.ts && tsx test/api.test.ts && tsx test/admin.test.ts && tsx test/legacy.test.ts && tsx test/client.smoke.ts",
     "admin": "tsx scripts/admin.ts",
     "typecheck": "tsc --noEmit"
   },

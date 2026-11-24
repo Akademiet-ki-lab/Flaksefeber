@@ -125,29 +125,29 @@ export default function AdminPanel({ username, classes }: { username: string; cl
   const visible = q ? shown.filter((r) => r.name.toLowerCase().includes(q)) : shown;
 
   return (
-    <main className="ad-main">
-      <header className="ad-top">
+    <main className="ffa-main">
+      <header className="ffa-top">
         <h1>Flaksefeber admin</h1>
-        <div className="ad-who">
+        <div className="ffa-who">
           <span>
             Innlogget som <strong>{username}</strong>
           </span>
-          <a className="ad-btn" href="/">
+          <a className="ffa-btn" href="/">
             Til spillet
           </a>
-          <button className="ad-btn" type="button" onClick={logout}>
+          <button className="ffa-btn" type="button" onClick={logout}>
             Logg ut
           </button>
         </div>
       </header>
 
-      <p className={"ad-msg" + (msg.bad ? " ad-bad" : "")} role="status" aria-live="polite">
+      <p className={"ffa-msg" + (msg.bad ? " ffa-bad" : "")} role="status" aria-live="polite">
         {msg.text}
       </p>
 
-      <section className="ad-card">
+      <section className="ffa-card">
         <h2>Legg til på topplista</h2>
-        <form className="ad-add" onSubmit={addRow}>
+        <form className="ffa-add" onSubmit={addRow}>
           <label>
             Navn
             <input
@@ -174,16 +174,16 @@ export default function AdminPanel({ username, classes }: { username: string; cl
               onChange={(e) => setAdd({ ...add, score: e.target.value })}
             />
           </label>
-          <button className="ad-btn ad-primary" type="submit">
+          <button className="ffa-btn ffa-primary" type="submit">
             Legg til
           </button>
         </form>
       </section>
 
-      <section className="ad-card">
-        <div className="ad-head">
+      <section className="ffa-card">
+        <div className="ffa-head">
           <h2>Toppliste</h2>
-          <div className="ad-filters">
+          <div className="ffa-filters">
             <input
               type="search"
               placeholder="Søk etter navn"
@@ -201,18 +201,18 @@ export default function AdminPanel({ username, classes }: { username: string; cl
         </div>
 
         {rows === null ? (
-          <p className="ad-muted">Henter …</p>
+          <p className="ffa-muted">Henter …</p>
         ) : visible.length === 0 ? (
-          <p className="ad-muted">Ingen rader her.</p>
+          <p className="ffa-muted">Ingen rader her.</p>
         ) : (
-          <div className="ad-scroll">
-            <table className="ad-table">
+          <div className="ffa-scroll">
+            <table className="ffa-table">
               <thead>
                 <tr>
-                  <th className="ad-num">Plass</th>
+                  <th className="ffa-num">Plass</th>
                   <th>Navn</th>
                   <th>Klasse</th>
-                  <th className="ad-num">Score</th>
+                  <th className="ffa-num">Score</th>
                   <th>Status</th>
                   <th aria-label="Handlinger"></th>
                 </tr>
@@ -220,8 +220,8 @@ export default function AdminPanel({ username, classes }: { username: string; cl
               <tbody>
                 {visible.map((r) =>
                   editing && editing.id === r.id ? (
-                    <tr key={r.id} className="ad-editing">
-                      <td className="ad-num">{r.place ?? "–"}</td>
+                    <tr key={r.id} className="ffa-editing">
+                      <td className="ffa-num">{r.place ?? "–"}</td>
                       <td>
                         <input
                           aria-label="Navn"
@@ -241,10 +241,10 @@ export default function AdminPanel({ username, classes }: { username: string; cl
                           ))}
                         </select>
                       </td>
-                      <td className="ad-num">
+                      <td className="ffa-num">
                         <input
                           aria-label="Score"
-                          className="ad-score-input"
+                          className="ffa-score-input"
                           inputMode="numeric"
                           value={editing.score}
                           onChange={(e) => setEditing({ ...editing, score: e.target.value })}
@@ -252,28 +252,28 @@ export default function AdminPanel({ username, classes }: { username: string; cl
                         />
                       </td>
                       <td></td>
-                      <td className="ad-actions">
-                        <button className="ad-btn ad-primary" type="button" onClick={save}>
+                      <td className="ffa-actions">
+                        <button className="ffa-btn ffa-primary" type="button" onClick={save}>
                           Lagre
                         </button>
-                        <button className="ad-btn" type="button" onClick={() => setEditing(null)}>
+                        <button className="ffa-btn" type="button" onClick={() => setEditing(null)}>
                           Avbryt
                         </button>
                       </td>
                     </tr>
                   ) : (
-                    <tr key={r.id} className={r.hidden ? "ad-hidden" : ""}>
-                      <td className="ad-num">{r.place ?? "–"}</td>
+                    <tr key={r.id} className={r.hidden ? "ffa-hidden" : ""}>
+                      <td className="ffa-num">{r.place ?? "–"}</td>
                       <td>{r.name}</td>
                       <td>{r.klass}</td>
-                      <td className="ad-num">{r.score}</td>
+                      <td className="ffa-num">{r.score}</td>
                       <td>
-                        {r.hidden && <span className="ad-tag">Skjult</span>}
-                        {!r.player && <span className="ad-tag ad-tag-admin">Lagt til av admin</span>}
+                        {r.hidden && <span className="ffa-tag">Skjult</span>}
+                        {!r.player && <span className="ffa-tag ffa-tag-admin">Lagt til av admin</span>}
                       </td>
-                      <td className="ad-actions">
+                      <td className="ffa-actions">
                         <button
-                          className="ad-btn"
+                          className="ffa-btn"
                           type="button"
                           onClick={() =>
                             setEditing({ id: r.id, name: r.name, klass: r.klass, score: String(r.score) })
@@ -281,10 +281,10 @@ export default function AdminPanel({ username, classes }: { username: string; cl
                         >
                           Endre
                         </button>
-                        <button className="ad-btn" type="button" onClick={() => toggleHidden(r)}>
+                        <button className="ffa-btn" type="button" onClick={() => toggleHidden(r)}>
                           {r.hidden ? "Vis" : "Skjul"}
                         </button>
-                        <button className="ad-btn ad-danger" type="button" onClick={() => remove(r)}>
+                        <button className="ffa-btn ffa-danger" type="button" onClick={() => remove(r)}>
                           Slett
                         </button>
                       </td>

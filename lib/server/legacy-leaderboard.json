@@ -1,0 +1,307 @@
+{
+  "source": "https://akademiet-ki-lab.github.io/Flaksefeber/ (Supabase-versjonen)",
+  "fetchedAt": "2026-11-24T13:57:51.784Z",
+  "note": "Offentlig toppliste fra den gamle versjonen, hentet ved overgangen. Skal aldri endres.",
+  "rows": [
+    {
+      "rank": 1,
+      "name": "Mark",
+      "klass": "1IM",
+      "score": 305
+    },
+    {
+      "rank": 2,
+      "name": "Andreas",
+      "klass": "2IM",
+      "score": 300
+    },
+    {
+      "rank": 3,
+      "name": "Krister",
+      "klass": "Lærere",
+      "score": 291
+    },
+    {
+      "rank": 4,
+      "name": "Manraj",
+      "klass": "1STA",
+      "score": 260
+    },
+    {
+      "rank": 5,
+      "name": "Marius",
+      "klass": "3MK",
+      "score": 255
+    },
+    {
+      "rank": 6,
+      "name": "Edward",
+      "klass": "3MK",
+      "score": 243
+    },
+    {
+      "rank": 7,
+      "name": "Thisath",
+      "klass": "1STA",
+      "score": 241
+    },
+    {
+      "rank": 8,
+      "name": "Adrian",
+      "klass": "2IM",
+      "score": 240
+    },
+    {
+      "rank": 9,
+      "name": "Lukas (Maskorama)",
+      "klass": "2IM",
+      "score": 230
+    },
+    {
+      "rank": 10,
+      "name": "Andreas",
+      "klass": "2IM",
+      "score": 226
+    },
+    {
+      "rank": 11,
+      "name": "Gabriella",
+      "klass": "1STA",
+      "score": 216
+    },
+    {
+      "rank": 12,
+      "name": "Magnus B",
+      "klass": "1STA",
+      "score": 210
+    },
+    {
+      "rank": 13,
+      "name": "Beheshta Husseini",
+      "klass": "1STA",
+      "score": 207
+    },
+    {
+      "rank": 14,
+      "name": "Mathias C",
+      "klass": "1MK",
+      "score": 206
+    },
+    {
+      "rank": 15,
+      "name": "Maria",
+      "klass": "Lærere",
+      "score": 204
+    },
+    {
+      "rank": 16,
+      "name": "Tilde TB",
+      "klass": "1MK",
+      "score": 201
+    },
+    {
+      "rank": 17,
+      "name": "AdrianT",
+      "klass": "2IM",
+      "score": 195
+    },
+    {
+      "rank": 18,
+      "name": "Keyla Correia",
+      "klass": "1STA",
+      "score": 180
+    },
+    {
+      "rank": 19,
+      "name": "Sindre",
+      "klass": "3STA",
+      "score": 172
+    },
+    {
+      "rank": 20,
+      "name": "max",
+      "klass": "1MK",
+      "score": 171
+    },
+    {
+      "rank": 21,
+      "name": "Kristian",
+      "klass": "3MK",
+      "score": 166
+    },
+    {
+      "rank": 22,
+      "name": "max",
+      "klass": "1MK",
+      "score": 156
+    },
+    {
+      "rank": 23,
+      "name": "Methum",
+      "klass": "1STA",
+      "score": 154
+    },
+    {
+      "rank": 24,
+      "name": "Madikken",
+      "klass": "2IM",
+      "score": 153
+    },
+    {
+      "rank": 25,
+      "name": "Jossi",
+      "klass": "2IM",
+      "score": 145
+    },
+    {
+      "rank": 26,
+      "name": "Oscar Johansen",
+      "klass": "Påbygg",
+      "score": 143
+    },
+    {
+      "rank": 27,
+      "name": "Wajid",
+      "klass": "2IM",
+      "score": 124
+    },
+    {
+      "rank": 28,
+      "name": "Alizee",
+      "klass": "1MK",
+      "score": 109
+    },
+    {
+      "rank": 29,
+      "name": "Paula",
+      "klass": "1MK",
+      "score": 96
+    },
+    {
+      "rank": 30,
+      "name": "akky pc",
+      "klass": "1IM",
+      "score": 94
+    },
+    {
+      "rank": 31,
+      "name": "Daniel",
+      "klass": "2IM",
+      "score": 93
+    },
+    {
+      "rank": 32,
+      "name": "Qasim",
+      "klass": "2IM",
+      "score": 92
+    },
+    {
+      "rank": 33,
+      "name": "Erik",
+      "klass": "Påbygg",
+      "score": 89
+    },
+    {
+      "rank": 34,
+      "name": "Ronny",
+      "klass": "2IM",
+      "score": 79
+    },
+    {
+      "rank": 35,
+      "name": "Haakon",
+      "klass": "1STA",
+      "score": 67
+    },
+    {
+      "rank": 36,
+      "name": "Nadine",
+      "klass": "2IM",
+      "score": 63
+    },
+    {
+      "rank": 37,
+      "name": "JulIe",
+      "klass": "1MK",
+      "score": 59
+    },
+    {
+      "rank": 38,
+      "name": "Falk",
+      "klass": "2STB",
+      "score": 48
+    },
+    {
+      "rank": 39,
+      "name": "Norah",
+      "klass": "1MK",
+      "score": 43
+    },
+    {
+      "rank": 40,
+      "name": "Blackie",
+      "klass": "1MK",
+      "score": 39
+    },
+    {
+      "rank": 41,
+      "name": "Yuriii",
+      "klass": "1STB",
+      "score": 33
+    },
+    {
+      "rank": 42,
+      "name": "Isobel",
+      "klass": "1STB",
+      "score": 31
+    },
+    {
+      "rank": 43,
+      "name": "Jesper",
+      "klass": "1STA",
+      "score": 31
+    },
+    {
+      "rank": 44,
+      "name": "erik",
+      "klass": "3MK",
+      "score": 27
+    },
+    {
+      "rank": 45,
+      "name": "Ingrid",
+      "klass": "1STB",
+      "score": 26
+    },
+    {
+      "rank": 46,
+      "name": "Fatima",
+      "klass": "1STA",
+      "score": 20
+    },
+    {
+      "rank": 47,
+      "name": "Mikkel",
+      "klass": "Påbygg",
+      "score": 14
+    },
+    {
+      "rank": 48,
+      "name": "Esther",
+      "klass": "1STA",
+      "score": 11
+    },
+    {
+      "rank": 49,
+      "name": "Julie",
+      "klass": "2IM",
+      "score": 6
+    },
+    {
+      "rank": 50,
+      "name": "Maria a",
+      "klass": "1MK",
+      "score": 6
+    }
+  ]
+}

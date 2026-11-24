@@ -39,10 +39,10 @@ export default function LoginForm() {
   }
 
   return (
-    <main className="ad-login">
-      <form className="ad-card ad-login-card" onSubmit={submit}>
+    <main className="ffa-login">
+      <form className="ffa-card ffa-login-card" onSubmit={submit}>
         <h1>Admin</h1>
-        <p className="ad-muted">Logg inn for å endre topplista.</p>
+        <p className="ffa-muted">Logg inn for å endre topplista.</p>
         <label htmlFor="username">Brukernavn</label>
         <input
           id="username"
@@ -60,13 +60,13 @@ export default function LoginForm() {
           autoComplete="current-password"
           required
         />
-        <p className="ad-error" role="alert">
+        <p className="ffa-error" role="alert">
           {error}
         </p>
-        <button className="ad-btn ad-primary" type="submit" disabled={busy}>
+        <button className="ffa-btn ffa-primary" type="submit" disabled={busy}>
           {busy ? "Logger inn …" : "Logg inn"}
         </button>
-        <a className="ad-back" href="/">
+        <a className="ffa-back" href="/">
           &#8249; Til spillet
         </a>
       </form>

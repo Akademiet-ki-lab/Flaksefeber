@@ -7,6 +7,7 @@ import Database from "better-sqlite3";
 import type { Database as DB } from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import legacy from "./legacy-leaderboard.json";
 
 export type { DB };
 
@@ -46,6 +47,7 @@ export type AdminRow = { username: string; pass_hash: string; created_at: number
 export type AdminSessionRow = { id: string; username: string; expires_at: number };
 export type AdminLogRow = { id: number; username: string; action: string; details: string; at: number };
 export type Count = { n: number };
+export type LegacyRow = { rank: number; name: string; klass: string; score: number };
 
 const SCHEMA = `
 create table if not exists players (
@@ -115,8 +117,49 @@ export function openDb(file: string): DB {
   db.pragma("busy_timeout = 5000");
   migrate(db);
   db.exec(SCHEMA);
+  seedLegacy(db);
   return db;
 }
+
+/*
+  The leaderboard from the old Supabase version, copied once at the switch
+  (lib/server/legacy-leaderboard.json). It is only for looking back: after the
+  first fill, triggers refuse every insert, update and delete, so nothing in
+  the app (not even an admin) can change it.
+*/
+function seedLegacy(db: DB): void {
+  db.exec(`
+    create table if not exists legacy_leaderboard (
+      rank  integer primary key,
+      name  text not null,
+      klass text not null,
+      score integer not null
+    );
+  `);
+  db.transaction(() => {
+    const { n } = db.prepare("select count(*) as n from legacy_leaderboard").get() as Count;
+    if (n === 0) {
+      const insert = db.prepare(
+        "insert into legacy_leaderboard (rank, name, klass, score) values (?, ?, ?, ?)",
+      );
+      for (const r of legacy.rows as LegacyRow[]) insert.run(r.rank, r.name, r.klass, r.score);
+    }
+    for (const what of ["insert", "update", "delete"])
+      db.exec(`
+        create trigger if not exists legacy_leaderboard_no_${what}
+        before ${what} on legacy_leaderboard
+        begin select raise(abort, 'legacy_leaderboard er skrivebeskyttet'); end;
+      `);
+  })();
+}
+
+export function legacyLeaderboard(db: DB): LegacyRow[] {
+  return db
+    .prepare("select rank, name, klass, score from legacy_leaderboard order by rank")
+    .all() as LegacyRow[];
+}
+
+export const legacyFetchedAt: string = legacy.fetchedAt;
 
 // older databases had player_id as the leaderboard's primary key; give the
 // table its own id so admins can add rows that don't belong to a player

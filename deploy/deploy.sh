@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (virker også med zsh)
 # Legger ut siste versjon av Flaksefeber fra GitHub på VPS-en.
 #
 #   ./deploy.sh              legger ut main
@@ -38,8 +39,9 @@ trap 'rm -rf "$TMP_DIR"' EXIT   # rydder opp også hvis noe feiler
 echo "==> Henter $BRANCH fra GitHub..."
 git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TMP_DIR" \
   || { echo "Fant ikke branchen \"$BRANCH\" i $REPO_URL"; exit 1; }
-[[ -f "$TMP_DIR/ecosystem.config.cjs" && -f "$TMP_DIR/next.config.js" ]] \
-  || { echo "Fant ikke ecosystem.config.cjs / next.config.js i repoet"; exit 1; }
+[[ -f "$TMP_DIR/ecosystem.config.cjs" && -f "$TMP_DIR/package.json" ]] \
+  && [[ -f "$TMP_DIR/next.config.ts" || -f "$TMP_DIR/next.config.js" || -f "$TMP_DIR/next.config.mjs" ]] \
+  || { echo "Fant ikke ecosystem.config.cjs / package.json / next.config i branchen \"$BRANCH\""; exit 1; }
 echo "    Branch: $BRANCH, versjon: $(git -C "$TMP_DIR" log -1 --format='%h %s')"
 
 echo "==> Installerer, tester og bygger (i midlertidig mappe)..."
@@ -52,7 +54,7 @@ echo "==> Installerer, tester og bygger (i midlertidig mappe)..."
 
 if [[ -f "$TARGET_DIR/data/flaksefeber.db" ]]; then
   echo "==> Tar backup av databasen..."
-  (cd "$TMP_DIR" && DATA_DIR="$TARGET_DIR/data" node scripts/admin.js backup)
+  (cd "$TMP_DIR" && DATA_DIR="$TARGET_DIR/data" npm run -s admin -- backup)
 fi
 
 echo "==> Kopierer til $TARGET_DIR..."
