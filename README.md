@@ -6,7 +6,7 @@
 
 Et Flappy Bird-inspirert spill der en norsk havørn flyr gjennom en snødekt granskog. Spillet er laget med Next.js, React, TypeScript og Canvas. Spilleregjlene, fremgangen og konkurransescore verifiseres av serveren og lagres i SQLite.
 
-**Nytt nettsted:** [0xd3adbeef.no](https://0xd3adbeef.no)
+**Nytt nettsted:** [flaksefeber.no](https://flaksefeber.no)
 
 ## Funksjoner
 
