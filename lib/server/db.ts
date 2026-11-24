@@ -223,3 +223,13 @@ export function getDb(): DB {
   if (!g.__flaksefeberDb) g.__flaksefeberDb = openDb(dbFile());
   return g.__flaksefeberDb;
 }
+
+export function databaseVersion(): string {
+  const dir = process.env.DATA_DIR || path.join(process.cwd(), "data");
+  const file = path.join(dir, "database-version.txt");
+  try {
+    return fs.readFileSync(file, "utf8").trim() || "0000-0000-000000";
+  } catch {
+    return "0000-0000-000000";
+  }
+}

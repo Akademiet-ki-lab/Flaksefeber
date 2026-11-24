@@ -566,16 +566,22 @@ canvas {
 /* competition: log in / new account / logged in. The new-account form is tall,
    so the card scrolls inside the game frame when needed. */
 #compForm .card {
+  min-height: 320px;
   max-height: calc(100% - 3.6em);
-  margin-top: 3em;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
-#compForm #loginForm {
+#compForm #loginForm,
+#compForm #compMe {
   margin: auto;
 }
-#compForm .card label {
-  margin-top: 0.7em;
+#compForm #compMe {
+  display: flex;
+  flex-direction: column;
+}
+#compForm #compGo {
+  margin-top: auto;
+}
+#compForm #logoutBtn {
+  flex: none;
 }
 .register-scroll {
   position: absolute;
@@ -773,4 +779,19 @@ canvas {
 .intro.comp .skins,
 .intro.comp #goalLine {
   display: none;
+}
+.database-version {
+  position: fixed;
+  right: max(10px, env(safe-area-inset-right, 0px));
+  bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(5, 14, 26, 0.45);
+  color: rgba(245, 249, 252, 0.72);
+  font: 700 0.62rem/1.2 var(--font-body);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
 }
