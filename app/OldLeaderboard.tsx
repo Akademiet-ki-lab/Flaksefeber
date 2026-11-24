@@ -3,17 +3,10 @@ import type { LegacyRow } from "../lib/server/db";
 // The leaderboard from before the switch to the new server. Read-only, for
 // looking back at who led. Shown to the left of the game on wide screens.
 export default function OldLeaderboard({ rows, fetchedAt }: { rows: LegacyRow[]; fetchedAt: string }) {
-  const date = new Date(fetchedAt).toLocaleDateString("nb-NO", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "Europe/Oslo",
-  });
   return (
     <aside className="oldlb" aria-labelledby="oldlbTitle">
       <div className="oldlb-head">
-        <h2 id="oldlbTitle">Toppliste før {date}</h2>
-        <p className="oldlb-note">Fra den gamle versjonen av spillet. Den endres aldri.</p>
+        <h2 id="oldlbTitle">Gammel leaderboard</h2>
       </div>
       {rows.length === 0 ? (
         <p className="oldlb-note">Ingen resultater.</p>
