@@ -16,6 +16,12 @@ TARGET_DIR="${TARGET_DIR:-/var/www/html/flaksefeber}"
 PM2_NAME="flaksefeber"
 export PORT="${PORT:-49000}"                           # må stemme med proxyen (nginx/Apache)
 
+if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  source "$NVM_DIR/nvm.sh"
+  nvm use --silent default
+fi
+
 if [[ "$EUID" -eq 0 ]]; then
   echo "Ikke kjør dette som root; brukeren som kjører deploy må eie appmappa og PM2-prosessen."
   exit 1
