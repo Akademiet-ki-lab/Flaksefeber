@@ -33,7 +33,15 @@ XP, valgt skin og rekorden din lagres på serveren, ikke i nettleseren. Se «Fus
 
 ## Konkurranse og felles toppliste
 
-Velg **Konkurranse** fra menyen, skriv inn navn og klasse, og spill så lenge du klarer. Konkurranserunden har ingen målscore og gir ikke XP eller arenaopplåsing. Serveren kontrollerer rundene og lagrer kun spillerens beste resultat. Topplista er felles for alle som spiller på samme server; den kan vises samlet eller filtrert på klasse. Navnet og klassen kan oppdateres ved neste konkurranserunde. Rader med stygge navn kan skjules med `npm run admin` (se «Administrasjon»).
+Velg **Konkurranse** fra menyen. Konkurranse krever en bruker. Vanlig modus gjør det ikke.
+
+- **Ny bruker:** eleven velger et unikt brukernavn (til innlogging), et visningsnavn (vises på topplista), klasse og et passord på minst 6 tegn.
+- **Innlogging** varer i 30 dager, eller til eleven trykker «Logg ut».
+- **Passord og klasse** kan bare endres av admin, på admin-siden. Elever kan ikke endre dem selv. Glemt passord: admin setter et nytt.
+
+Konkurranserunden har ingen målscore og gir ikke XP eller arenaopplåsing. Serveren kontrollerer rundene og lagrer kun brukerens beste resultat. Resultatet hører til brukeren, så det er det samme uansett hvilken PC eleven spiller på. Topplista kan vises samlet eller filtrert på klasse.
+
+Den gamle topplista fra Supabase-versjonen vises til venstre for spillet på store skjermer. Den ligger i en egen tabell som aldri endres.
 
 ## Slik kjører du det
 
@@ -163,10 +171,11 @@ Miljøvariabler (settes i `ecosystem.config.cjs`, `PORT` kan også settes foran 
 Teksten «Laget av Aksel Craig» nederst på hovedmenyen er en skjult knapp til `/admin`. Den ser ut som vanlig tekst. Der logger du inn og kan:
 
 - legge til en rad på topplista (navn, klasse, score)
-- endre navn, klasse eller score på en rad
+- endre navn, klasse eller score på en rad (for en elev endres også brukeren)
 - skjule en rad (vises ikke offentlig, men kan vises igjen) eller slette den
+- under **Brukere**: sette nytt passord for en elev (eleven logges ut overalt), endre visningsnavn og klasse, eller slette brukeren (raden på topplista slettes også)
 
-Brukernavnene for admin har ingenting med navnene på topplista å gjøre. De lages bare fra terminalen på serveren, og passordet lagres som en scrypt-hash:
+Brukernavnene for admin er adskilt fra elevenes brukere og har ingenting med navnene på topplista å gjøre. De lages bare fra terminalen på serveren, og passordet lagres som en scrypt-hash:
 
 ```
 npm run admin -- add-user <brukernavn>      # spør om passord (minst 10 tegn); kjør igjen for nytt passord
@@ -176,7 +185,7 @@ npm run admin -- users
 
 Innloggingen varer i 8 timer. Etter 8 feil forsøk på et kvarter (per bruker og per IP) må man vente. Alle endringer lagres med hvem som gjorde dem, og kan vises med `npm run admin -- log`.
 
-Sletter du raden til en ekte spiller, kommer den tilbake neste gang hen spiller en konkurranserunde. Vil du stoppe en spiller, skjul raden i stedet.
+Sletter du raden til en elev, kommer den tilbake neste gang eleven spiller konkurranse. Vil du stoppe en elev, skjul raden eller slett brukeren.
 
 ### Fra terminalen
 

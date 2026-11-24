@@ -35,7 +35,7 @@ interface Skin {
 }
 type GameMode = "normal" | "comp";
 type GameState = "ready" | "play" | "dying" | "landed" | "over" | "won";
-/** Name and class entered for competition mode. */
+/** Name and class shown during a competition run (from the account). */
 interface Competitor {
   name: string;
   klass: Klass;
@@ -103,8 +103,15 @@ interface Progress {
   xp: number;
   skin: number;
 }
+/** The logged-in account for competition mode. */
+interface Account {
+  username: string;
+  displayName: string;
+  klass: Klass;
+}
 interface SessionData {
   progress: Progress;
+  account: Account | null;
 }
 interface RunStartData {
   runId: string;
@@ -157,9 +164,9 @@ export function startGame() {
     TREES_PER_XP, // 1 XP for every 10th tree
     FEATHER_AT, // a golden feather appears after this many trees in a run
   } = Sim.CONST;
-  const KEY_COMPETITOR = "orneflukt-competitor";
   const LEGACY_KEYS = [
     "orneflukt-auth", // old Supabase login, no longer used
+    "orneflukt-competitor", // name + class from before accounts
     "orneflukt-best",
     "orneflukt-bests",
     "orneflukt-arenas",
@@ -355,16 +362,28 @@ export function startGame() {
   const menu = $("menu"),
     compForm = $("compForm"),
     lb = $("lb"),
-    nameInput = $<HTMLInputElement>("compName"),
     classBox = $("klasser"),
-    compStart = $<HTMLButtonElement>("compStart"),
+    compMe = $("compMe"),
+    meName = $("meName"),
+    meInfo = $("meInfo"),
+    loginForm = $<HTMLFormElement>("loginForm"),
+    loginUser = $<HTMLInputElement>("loginUser"),
+    loginPass = $<HTMLInputElement>("loginPass"),
+    loginMsg = $("loginMsg"),
+    registerForm = $<HTMLFormElement>("registerForm"),
+    regUser = $<HTMLInputElement>("regUser"),
+    regName = $<HTMLInputElement>("regName"),
+    regPass = $<HTMLInputElement>("regPass"),
+    regPass2 = $<HTMLInputElement>("regPass2"),
+    regMsg = $("regMsg"),
     lbRows = $("lbRows"),
     lbTabs = $("lbTabs"),
     compHud = $("compHud"),
     hudName = $("hudName"),
     hudBest = $("hudBest"),
     classes = Sim.CONST.CLASSES;
-  let selectedClass: Klass = classes[0],
+  let selectedClass: Klass | null = null, // chosen when making an account
+    account: Account | null = null, // logged in (needed for competition mode)
     gameMode: GameMode = "normal",
     competitor: Competitor | null = null,
     leaderboardClass: Klass | null = null,
@@ -372,34 +391,6 @@ export function startGame() {
     compRank: number | null = null;
   const isKlass = (k: unknown): k is Klass =>
     (classes as readonly unknown[]).includes(k);
-
-  function rememberCompetitor() {
-    const name = nameInput.value.trim();
-    if (!name) return;
-    try {
-      localStorage.setItem(
-        KEY_COMPETITOR,
-        JSON.stringify({ name, klass: selectedClass }),
-      );
-    } catch (_) {}
-  }
-  try {
-    // JSON.parse(null) gives null, so a missing item is fine
-    const saved = JSON.parse(localStorage.getItem(KEY_COMPETITOR) as string) as {
-      name?: unknown;
-      klass?: unknown;
-    } | null;
-    if (
-      saved &&
-      typeof saved.name === "string" &&
-      saved.name.trim() &&
-      isKlass(saved.klass)
-    ) {
-      nameInput.value = saved.name.slice(0, 20);
-      selectedClass = saved.klass;
-      compStart.disabled = false;
-    }
-  } catch (_) {}
 
   let view = 1;
   let cacheDirty = true,
@@ -535,6 +526,7 @@ export function startGame() {
       if (res.status === 200 && res.data && res.data.progress) {
         online = true;
         applyProgress(res.data.progress);
+        account = res.data.account ?? null;
         return true;
       }
     } catch (e) {}
@@ -780,6 +772,17 @@ export function startGame() {
         if (status === 200 && data) {
           seed = data.seed;
           runToken = data.runId;
+        } else if (status === 401 && gameMode === "comp") {
+          // the login ran out (or a teacher set a new password): log in again
+          starting = false;
+          account = null;
+          if (myGen === gen) {
+            intro.hidden = true;
+            $("toMenu").hidden = true;
+            compHud.hidden = true;
+            showCompForm("login", "Du er logget ut. Logg inn igjen.");
+          }
+          return;
         } else {
           await loadSession();
         }
@@ -877,7 +880,6 @@ export function startGame() {
           inputs: r.inputs,
           frames: r.frames,
         };
-        if (comp) Object.assign(body, r.who);
         const { status, data } = await post<RunFinishData>("run-finish", body);
         if (status === 200 && data && data.result) {
           if (comp) {
@@ -1085,46 +1087,130 @@ export function startGame() {
     menu.hidden = true;
     reset();
   });
-  $("modeComp").addEventListener("click", () => {
+  /* ---- competition mode: needs an account ----
+     The server knows who is logged in (httpOnly cookie). Players make their own
+     account; only an admin can change a password. */
+  function showCompForm(view: "me" | "login" | "register", msg = "") {
     menu.hidden = true;
     compForm.hidden = false;
-    nameInput.focus();
+    compMe.hidden = view !== "me";
+    loginForm.hidden = view !== "login";
+    registerForm.hidden = view !== "register";
+    loginMsg.textContent = view === "login" ? msg : "";
+    regMsg.textContent = view === "register" ? msg : "";
+    if (view === "me" && account) {
+      meName.textContent = account.displayName;
+      meInfo.textContent = account.klass + " · brukernavn: " + account.username;
+      $("compGo").focus();
+    } else if (view === "login") loginUser.focus();
+    else if (view === "register") regUser.focus();
+  }
+  $("modeComp").addEventListener("click", async () => {
+    await sessionP; // know whether someone is logged in
+    showCompForm(account ? "me" : "login");
   });
   $("formBack").addEventListener("click", showMenu);
-  classes.forEach((klass, i) => {
+  $("toRegister").addEventListener("click", () => showCompForm("register"));
+  $("toLogin").addEventListener("click", () => showCompForm("login"));
+  classes.forEach((klass) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "chip" + (klass === selectedClass ? " on" : "");
+    b.className = "chip";
     b.textContent = klass;
+    b.setAttribute("aria-pressed", "false");
     b.addEventListener("click", () => {
       selectedClass = klass;
-      [...classBox.children].forEach((x) => x.classList.toggle("on", x === b));
-      rememberCompetitor();
+      [...classBox.children].forEach((x) => {
+        x.classList.toggle("on", x === b);
+        x.setAttribute("aria-pressed", String(x === b));
+      });
     });
     classBox.appendChild(b);
   });
-  nameInput.addEventListener("input", () => {
-    compStart.disabled = !nameInput.value.trim();
-    rememberCompetitor();
-  });
+
+  const ACCOUNT_ERRORS: Record<string, string> = {
+    wrong_login: "Feil brukernavn eller passord.",
+    rate: "For mange forsøk. Vent litt og prøv igjen.",
+    bad_username: "Brukernavnet må ha 2–32 tegn: bokstaver, tall, . _ -",
+    bad_name: "Visningsnavnet må ha 1–20 tegn.",
+    bad_klass: "Velg klassen din.",
+    bad_password: "Passordet må ha minst 6 tegn.",
+    taken: "Brukernavnet er tatt. Velg et annet.",
+  };
   let formBusy = false;
-  $("compFormEl").addEventListener("submit", async (e) => {
+  // send a login or new-account request; on success the player is logged in
+  async function accountRequest(
+    action: "account-login" | "account-register",
+    body: object,
+    msgEl: HTMLElement,
+    btn: HTMLButtonElement,
+  ) {
+    if (formBusy) return;
+    formBusy = true;
+    btn.disabled = true;
+    msgEl.textContent = "";
+    try {
+      const { status, data } = await post<{ account?: Account; error?: string }>(action, body);
+      if (status === 200 && data && data.account) {
+        account = data.account;
+        loginPass.value = regPass.value = regPass2.value = "";
+        showCompForm("me");
+      } else
+        msgEl.textContent =
+          (data && data.error && ACCOUNT_ERRORS[data.error]) || "Noe gikk galt. Prøv igjen.";
+    } catch (_) {
+      msgEl.textContent = "Fikk ikke kontakt med serveren.";
+    }
+    formBusy = false;
+    btn.disabled = false;
+  }
+  loginForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    const name = nameInput.value.trim();
-    if (!name || formBusy) return;
+    accountRequest(
+      "account-login",
+      { username: loginUser.value, password: loginPass.value },
+      loginMsg,
+      $<HTMLButtonElement>("loginBtn"),
+    );
+  });
+  registerForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!selectedClass) return void (regMsg.textContent = ACCOUNT_ERRORS.bad_klass);
+    if (regPass.value.length < 6) return void (regMsg.textContent = ACCOUNT_ERRORS.bad_password);
+    if (regPass.value !== regPass2.value)
+      return void (regMsg.textContent = "Passordene er ikke like.");
+    accountRequest(
+      "account-register",
+      {
+        username: regUser.value,
+        displayName: regName.value,
+        klass: selectedClass,
+        password: regPass.value,
+      },
+      regMsg,
+      $<HTMLButtonElement>("regBtn"),
+    );
+  });
+  $("logoutBtn").addEventListener("click", async () => {
+    try {
+      await post("account-logout", {});
+    } catch (_) {}
+    account = null;
+    showCompForm("login");
+  });
+  $("compGo").addEventListener("click", async () => {
+    if (!account || formBusy) return;
     formBusy = true;
     const myGen = gen;
-    rememberCompetitor();
     let best0 = 0;
     try {
-      await sessionP;
       const q = await post<LeaderboardData>("leaderboard", {});
       const me = q.data?.me;
       if (me) best0 = me.best || 0;
     } catch (_) {}
     formBusy = false;
-    if (myGen !== gen) return; // back to the menu while loading
-    competitor = { name, klass: selectedClass };
+    if (myGen !== gen || !account) return; // back to the menu while loading
+    competitor = { name: account.displayName, klass: account.klass };
     gameMode = "comp";
     compBest = best0;
     compForm.hidden = true;

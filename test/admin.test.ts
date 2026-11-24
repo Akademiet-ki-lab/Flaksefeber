@@ -35,8 +35,14 @@ async function call(
     db,
     new Request("http://spill.no/api/admin", { method: "POST", headers, body: JSON.stringify(body) }),
   );
-  const set = res.headers.get("set-cookie");
-  return { status: res.status, data: await res.json(), setCookie: set, cookie: set ? set.split(";")[0] : null };
+  const set = res.headers.getSetCookie();
+  return {
+    status: res.status,
+    data: await res.json(),
+    setCookie: res.headers.get("set-cookie"),
+    // every cookie the reply set (a game reply can set both ff_player and ff_account)
+    cookie: set.length ? set.map((c) => c.split(";")[0]).filter((c) => !c.endsWith("=")).join("; ") || null : null,
+  };
 }
 const PW = "riktig-hest-batteri";
 const login = (username = "laerer1", password = PW) => call({ action: "login", username, password });
@@ -85,7 +91,7 @@ await t("add, change and delete leaderboard rows", async () => {
   assert.strictEqual(add.status, 200, JSON.stringify(add.data));
   assert.deepStrictEqual(
     { ...add.data.row, id: 0, achievedAt: 0 },
-    { id: 0, name: "Kari", klass: "2STA", score: 57, hidden: false, player: false, achievedAt: 0 },
+    { id: 0, name: "Kari", klass: "2STA", score: 57, hidden: false, account: null, achievedAt: 0 },
   );
   rowId = add.data.row.id;
   for (const bad of [
@@ -146,6 +152,55 @@ await t("too many wrong passwords locks the login for a while", async () => {
   assert.strictEqual((await login("laerer3")).status, 429, "even the right password waits");
   resetLimits();
   assert.strictEqual((await login("laerer3")).status, 200);
+});
+
+await t("admins manage player accounts: password, name/class, delete", async () => {
+  resetLimits();
+  const a = (await login("laerer3")).cookie;
+  const game = (body: object, cookie?: string | null) => call(body, { handler: handleGame, cookie });
+  // a player makes an account and gets on the leaderboard
+  const reg = await game({ action: "account-register", username: "kari", displayName: "Kari", klass: "2STA", password: "hemmelig" });
+  assert.strictEqual(reg.status, 200);
+  assert.match(reg.cookie ?? "", /ff_player=.*ff_account=|ff_account=.*ff_player=/, "logged in after registering");
+  assert.ok((await game({ action: "session" }, reg.cookie)).data.account, "the login works before the password change");
+  const accId = (db.prepare("select id from accounts where username = 'kari'").get() as { id: number }).id;
+  db.prepare(
+    "insert into leaderboard (account_id, name, klass, best, achieved_at, updated_at) values (?, 'Kari', '2STA', 40, 1, 1)",
+  ).run(accId);
+
+  const list = await call({ action: "accounts" }, { cookie: a });
+  const kari = list.data.accounts.find((x: { username: string }) => x.username === "kari");
+  assert.deepStrictEqual(
+    { ...kari, createdAt: 0 },
+    { id: accId, username: "kari", displayName: "Kari", klass: "2STA", createdAt: 0, best: 40 },
+  );
+  assert.ok(!JSON.stringify(list.data).includes("scrypt"), "password hashes never leave the server");
+
+  // new password: too short is refused; the old one stops working; the player is logged out
+  assert.strictEqual((await call({ action: "account-update", id: accId, password: "12345" }, { cookie: a })).status, 400);
+  const up = await call({ action: "account-update", id: accId, password: "nytt-passord", displayName: "Kari N", klass: "3STA" }, { cookie: a });
+  assert.strictEqual(up.status, 200, JSON.stringify(up.data));
+  assert.strictEqual((await game({ action: "session" }, reg.cookie)).data.account, null, "logged out everywhere");
+  assert.strictEqual((await game({ action: "account-login", username: "kari", password: "hemmelig" })).status, 401);
+  assert.strictEqual((await game({ action: "account-login", username: "kari", password: "nytt-passord" })).status, 200);
+  // the leaderboard follows the account's new name and class
+  const lb = await game({ action: "leaderboard" });
+  assert.ok(lb.data.rows.some((r: { name: string; klass: string }) => r.name === "Kari N" && r.klass === "3STA"));
+  const logged = db.prepare("select details from admin_log where action = 'account-update'").get() as { details: string };
+  assert.ok(!logged.details.includes("nytt-passord"), "the password is never logged");
+
+  // players can't change passwords themselves: there is no such action
+  assert.strictEqual((await game({ action: "account-password", password: "x" }, reg.cookie)).status, 404);
+
+  // deleting removes the account and its leaderboard row
+  assert.strictEqual((await call({ action: "account-delete", id: accId }, { cookie: a })).status, 200);
+  assert.strictEqual((await call({ action: "account-delete", id: accId }, { cookie: a })).status, 404);
+  assert.strictEqual(
+    (db.prepare("select count(*) as n from leaderboard where account_id = ?").get(accId) as { n: number }).n,
+    0,
+  );
+  // and none of this works without an admin login
+  assert.strictEqual((await call({ action: "accounts" })).status, 401);
 });
 
 console.log("\n" + n + " admin-tester OK");

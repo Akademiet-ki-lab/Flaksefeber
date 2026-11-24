@@ -114,16 +114,79 @@ export default function Page() {
             <button className="back" id="formBack" type="button">
               &#8249; Meny
             </button>
-            <form className="card" id="compFormEl" autoComplete="off">
+            {/* competition needs an account: logged in (compMe), log in, or new account */}
+            <div className="card" id="compMe" hidden>
               <h2>Konkurranse</h2>
-              <label htmlFor="compName">Navn</label>
+              <p className="who">
+                Logget inn som <strong id="meName"></strong>
+                <br />
+                <small id="meInfo"></small>
+              </p>
+              <button className="btn primary" id="compGo" type="button">
+                Start konkurranse
+              </button>
+              <button className="textlink" id="logoutBtn" type="button">
+                Logg ut
+              </button>
+            </div>
+
+            <form className="card" id="loginForm" hidden>
+              <h2>Logg inn</h2>
+              <p className="hint">Konkurranse krever en bruker.</p>
+              <label htmlFor="loginUser">Brukernavn</label>
               <input
                 type="text"
-                id="compName"
-                maxLength={20}
-                placeholder="Skriv navnet ditt"
-                autoComplete="off"
+                id="loginUser"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={32}
+                required
               />
+              <label htmlFor="loginPass">Passord</label>
+              <input
+                type="password"
+                id="loginPass"
+                autoComplete="current-password"
+                maxLength={200}
+                required
+              />
+              <p className="formmsg" id="loginMsg" role="alert"></p>
+              <button className="btn primary" id="loginBtn" type="submit">
+                Logg inn
+              </button>
+              <button className="textlink" id="toRegister" type="button">
+                Ny her? Lag bruker
+              </button>
+            </form>
+
+            <form className="card" id="registerForm" hidden>
+              <h2>Ny bruker</h2>
+              <label htmlFor="regUser">Brukernavn</label>
+              <input
+                type="text"
+                id="regUser"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={32}
+                aria-describedby="regUserHint"
+                required
+              />
+              <small className="hint" id="regUserHint">
+                Brukes til å logge inn. Bokstaver, tall, . _ -
+              </small>
+              <label htmlFor="regName">Visningsnavn</label>
+              <input
+                type="text"
+                id="regName"
+                maxLength={20}
+                aria-describedby="regNameHint"
+                required
+              />
+              <small className="hint" id="regNameHint">
+                Vises på topplista.
+              </small>
               <label id="klassLabel">Klasse</label>
               <div
                 className="chips"
@@ -131,8 +194,33 @@ export default function Page() {
                 role="group"
                 aria-labelledby="klassLabel"
               ></div>
-              <button className="btn primary" id="compStart" type="submit" disabled>
-                Start konkurranse
+              <label htmlFor="regPass">Passord (minst 6 tegn)</label>
+              <input
+                type="password"
+                id="regPass"
+                autoComplete="new-password"
+                minLength={6}
+                maxLength={200}
+                aria-describedby="regPassHint"
+                required
+              />
+              <small className="hint" id="regPassHint">
+                Glemmer du det, må en lærer sette nytt.
+              </small>
+              <label htmlFor="regPass2">Gjenta passord</label>
+              <input
+                type="password"
+                id="regPass2"
+                autoComplete="new-password"
+                maxLength={200}
+                required
+              />
+              <p className="formmsg" id="regMsg" role="alert"></p>
+              <button className="btn primary" id="regBtn" type="submit">
+                Lag bruker
+              </button>
+              <button className="textlink" id="toLogin" type="button">
+                Har du bruker? Logg inn
               </button>
             </form>
           </div>

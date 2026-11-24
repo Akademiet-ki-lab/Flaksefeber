@@ -10,7 +10,17 @@ import { handleGame } from "../lib/server/game";
    deliberately loose: any property of a fake element or canvas just works */
 type Fn = (...args: any[]) => any;
 type Event = { isTrusted?: boolean; code?: string; target?: any; preventDefault?: Fn };
-type FakeEl = { id: string; hidden: boolean; textContent: string; value?: string; style: object; handlers: Record<string, Fn> };
+type FakeEl = {
+  id: string;
+  hidden: boolean;
+  textContent: string;
+  value?: string;
+  style: object;
+  handlers: Record<string, Fn>;
+  children: any[];
+};
+// elements made with document.createElement (class chips ...): clickable in tests
+type MadeEl = { textContent: string; handlers: Record<string, Fn>; className: string };
 
 const stub: any = new Proxy(function () {}, {
   get: (t: any, k) => (k === Symbol.toPrimitive ? () => 0 : k in t ? t[k] : stub),
@@ -31,11 +41,12 @@ async function makeEnv(
   const els: Record<string, FakeEl> = {};
   const el = (id: string): FakeEl =>
     (els[id] ||= new Proxy<FakeEl>(
-      { id, hidden: false, textContent: "", style: {}, handlers: {} },
+      { id, hidden: false, textContent: "", style: {}, handlers: {}, children: [] },
       {
         get(t: any, k) {
           if (k === "addEventListener")
             return (ev: string, fn: Fn) => (t.handlers[ev] = fn);
+          if (k === "appendChild") return (c: unknown) => t.children.push(c);
           if (k === "getContext") return () => stub;
           if (k in t) return t[k];
           if (k === Symbol.toPrimitive) return () => 0;
@@ -63,11 +74,18 @@ async function makeEnv(
         body: init.body,
       }),
     );
-    const set = res.headers.get("set-cookie");
-    if (set) cookie = set.split(";")[0];
+    // the browser's cookie jar: ff_player and (when logged in) ff_account
+    const jar = new Map((cookie || "").split("; ").filter(Boolean).map((c) => c.split("=") as [string, string]));
+    for (const c of res.headers.getSetCookie()) {
+      const [k, v] = c.split(";")[0].split("=");
+      if (v) jar.set(k, v);
+      else jar.delete(k);
+    }
+    cookie = jar.size ? [...jar].map(([k, v]) => k + "=" + v).join("; ") : null;
     return res;
   };
   const frames: Fn[] = [];
+  const made: MadeEl[] = [];
   let clock = 0;
   const g: Record<string, unknown> = {
     window: null,
@@ -77,14 +95,24 @@ async function makeEnv(
     document: {
       getElementById: el,
       documentElement: stub,
-      createElement: () => ({
-        getContext: () => stub,
-        style: {},
-        addEventListener() {},
-        appendChild() {},
-        classList: { toggle() {}, add() {}, remove() {} },
-        children: [],
-      }),
+      createElement: () => {
+        const e: any = {
+          getContext: () => stub,
+          style: {},
+          textContent: "",
+          className: "",
+          handlers: {},
+          addEventListener(ev: string, fn: Fn) {
+            e.handlers[ev] = fn;
+          },
+          setAttribute() {},
+          appendChild() {},
+          classList: { toggle() {}, add() {}, remove() {} },
+          children: [],
+        };
+        made.push(e);
+        return e;
+      },
       fonts: undefined,
     },
     getComputedStyle: () => ({ getPropertyValue: () => "#336699" }),
@@ -115,7 +143,20 @@ async function makeEnv(
     }
   };
   const players = () => db.prepare("select * from players").all() as { seq: number; arenas: number; xp: number }[];
-  return { el, tick, store, players, log, win: { handlers: handlers as Record<string, (e: Event) => void> }, cookie: () => cookie };
+  // click the class chip with this text (in the new-account form)
+  const chip = (klass: string) => made.find((m) => m.textContent === klass)!.handlers.click();
+  const accounts = () => db.prepare("select username, display_name, klass from accounts").all();
+  return {
+    el,
+    tick,
+    store,
+    players,
+    accounts,
+    chip,
+    log,
+    win: { handlers: handlers as Record<string, (e: Event) => void> },
+    cookie: () => cookie,
+  };
 }
 
 (async () => {
@@ -233,20 +274,72 @@ async function makeEnv(
   );
   assert.strictEqual(env3.players().length, 0);
 
-  // competition: the form starts a run; going back to the menu meanwhile drops it
+  // competition needs an account: without one, the login form shows
   const env4 = await makeEnv();
   await env4.tick(5);
-  env4.el("compName").value = "Ola Nordmann";
+  const submit = (id: string) => env4.el(id).handlers.submit({ preventDefault() {} });
   env4.el("modeComp").handlers.click();
-  env4.el("compFormEl").handlers.submit({ preventDefault() {} });
+  await env4.tick(3);
+  assert.strictEqual(env4.el("loginForm").hidden, false, "login form shown");
+  assert.strictEqual(env4.el("compMe").hidden, true);
+  // make an account: passwords that don't match are caught before sending
+  env4.el("toRegister").handlers.click();
+  assert.strictEqual(env4.el("registerForm").hidden, false, "new-account form shown");
+  env4.el("regUser").value = "Ola.N";
+  env4.el("regName").value = "Ola Nordmann";
+  env4.el("regPass").value = "hemmelig";
+  env4.el("regPass2").value = "hemmelig";
+  submit("registerForm");
+  assert.match(env4.el("regMsg").textContent, /klasse/i, "class must be chosen");
+  env4.chip("2STA");
+  env4.el("regPass2").value = "hemmelix";
+  submit("registerForm");
+  assert.match(env4.el("regMsg").textContent, /ikke like/);
+  assert.ok(!env4.log.includes("account-register"), "nothing sent yet");
+  env4.el("regPass2").value = "hemmelig";
+  submit("registerForm");
+  await env4.tick(3);
+  assert.deepStrictEqual(env4.accounts(), [{ username: "ola.n", display_name: "Ola Nordmann", klass: "2STA" }]);
+  assert.strictEqual(env4.el("compMe").hidden, false, "logged in after making the account");
+  assert.strictEqual(env4.el("meName").textContent, "Ola Nordmann");
+  assert.match(env4.el("meInfo").textContent, /2STA.*ola\.n/);
+  assert.match(env4.cookie() ?? "", /ff_account=/);
+  // start: the run goes to the server, and the score lands under the account
+  env4.el("compGo").handlers.click();
   await env4.tick(8);
   assert.ok(env4.log.includes("run-start"), "competition run requested");
   assert.strictEqual(env4.el("intro").hidden, true, "competition game started");
-  const env5 = await makeEnv();
+  assert.strictEqual(env4.el("hudName").textContent, "Ola Nordmann · 2STA");
+  // log out: back to the login form; logging in again works
+  env4.el("toMenu").handlers.click();
+  env4.el("modeComp").handlers.click();
+  await env4.tick(3);
+  assert.strictEqual(env4.el("compMe").hidden, false, "still logged in");
+  env4.el("logoutBtn").handlers.click();
+  await env4.tick(3);
+  assert.strictEqual(env4.el("loginForm").hidden, false, "login form after logging out");
+  assert.ok(!(env4.cookie() ?? "").includes("ff_account"));
+  env4.el("loginUser").value = "ola.n";
+  env4.el("loginPass").value = "feil-passord";
+  submit("loginForm");
+  await env4.tick(3);
+  assert.match(env4.el("loginMsg").textContent, /Feil brukernavn eller passord/);
+  env4.el("loginPass").value = "hemmelig";
+  submit("loginForm");
+  await env4.tick(3);
+  assert.strictEqual(env4.el("compMe").hidden, false, "logged in again");
+
+  // going back to the menu while a competition start is loading drops it
+  const env5 = await makeEnv({ cookie: env4.cookie() ?? undefined });
   await env5.tick(5);
-  env5.el("compName").value = "Kari";
-  env5.el("modeComp").handlers.click();
-  env5.el("compFormEl").handlers.submit({ preventDefault() {} });
+  env5.el("toRegister").handlers.click();
+  env5.el("regUser").value = "kari";
+  env5.el("regName").value = "Kari";
+  env5.chip("1IM");
+  env5.el("regPass").value = env5.el("regPass2").value = "hemmelig";
+  env5.el("registerForm").handlers.submit({ preventDefault() {} });
+  await env5.tick(3);
+  env5.el("compGo").handlers.click();
   env5.el("formBack").handlers.click(); // back to the menu before the server answers
   await env5.tick(8);
   assert.ok(!env5.log.includes("run-start"), "no run after leaving the form");

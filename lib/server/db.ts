@@ -32,10 +32,20 @@ export type RunRow = {
   mode: "normal" | "comp";
   started_at: number;
   finished: 0 | 1;
+  account_id: number | null;
+};
+export type AccountRow = {
+  id: number;
+  username: string;
+  display_name: string;
+  klass: string;
+  pass_hash: string;
+  created_at: number;
+  updated_at: number;
 };
 export type LeaderboardRow = {
   id: number;
-  player_id: string | null;
+  account_id: number | null;
   name: string;
   klass: string;
   best: number;
@@ -63,6 +73,23 @@ create table if not exists players (
   check (arena >= 0 and arena < arenas)
 );
 
+-- accounts for competition mode (players make them themselves; only an admin
+-- can change a password, on /admin)
+create table if not exists accounts (
+  id           integer primary key autoincrement,
+  username     text not null unique,  -- lower case, used to log in
+  display_name text not null,         -- shown on the leaderboard
+  klass        text not null,
+  pass_hash    text not null,         -- scrypt$salt$hash
+  created_at   integer not null,
+  updated_at   integer not null
+);
+create table if not exists account_sessions (
+  id         text primary key,        -- sha256 of the cookie token
+  account_id integer not null references accounts (id) on delete cascade,
+  expires_at integer not null
+);
+
 create table if not exists runs (
   id         text primary key,
   player_id  text not null references players (id) on delete cascade,
@@ -71,13 +98,14 @@ create table if not exists runs (
   arena      integer not null,
   mode       text not null default 'normal' check (mode in ('normal', 'comp')),
   started_at integer not null,
-  finished   integer not null default 0
+  finished   integer not null default 0,
+  account_id integer references accounts (id) on delete cascade -- competition runs only
 );
 create index if not exists runs_player_started_idx on runs (player_id, started_at);
 
 create table if not exists leaderboard (
   id          integer primary key autoincrement,
-  player_id   text unique references players (id) on delete cascade, -- null = added by an admin
+  account_id  integer unique references accounts (id) on delete cascade, -- null = added by an admin
   name        text not null,
   klass       text not null,
   best        integer not null default 0 check (best >= 0),
@@ -161,30 +189,27 @@ export function legacyLeaderboard(db: DB): LegacyRow[] {
 
 export const legacyFetchedAt: string = legacy.fetchedAt;
 
-// older databases had player_id as the leaderboard's primary key; give the
-// table its own id so admins can add rows that don't belong to a player
+const columns = (db: DB, table: string) =>
+  (db.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+
 function migrate(db: DB): void {
-  const cols = db.prepare("pragma table_info(leaderboard)").all() as { name: string }[];
-  if (!cols.length || cols.some((c) => c.name === "id")) return;
-  db.exec(`
-    begin;
-    alter table leaderboard rename to leaderboard_old;
-    drop index if exists leaderboard_rank_idx;
-    create table leaderboard (
-      id          integer primary key autoincrement,
-      player_id   text unique references players (id) on delete cascade,
-      name        text not null,
-      klass       text not null,
-      best        integer not null default 0 check (best >= 0),
-      achieved_at integer not null,
-      updated_at  integer not null,
-      hidden      integer not null default 0
-    );
-    insert into leaderboard (player_id, name, klass, best, achieved_at, updated_at, hidden)
-      select player_id, name, klass, best, achieved_at, updated_at, hidden from leaderboard_old;
-    drop table leaderboard_old;
-    commit;
-  `);
+  // Competition mode now needs an account, and the leaderboard belongs to
+  // accounts instead of browsers. The leaderboard from before (one row per
+  // browser) is cleared once, here. The old Supabase leaderboard lives on,
+  // untouched, in legacy_leaderboard.
+  const lb = columns(db, "leaderboard");
+  if (lb.length && !lb.includes("account_id")) {
+    db.exec(`
+      begin;
+      drop index if exists leaderboard_rank_idx;
+      drop table leaderboard;
+      commit;
+    `);
+  }
+  // runs remember which account started a competition run
+  const runs = columns(db, "runs");
+  if (runs.length && !runs.includes("account_id"))
+    db.exec("alter table runs add column account_id integer references accounts (id) on delete cascade");
 }
 
 export function dbFile(): string {

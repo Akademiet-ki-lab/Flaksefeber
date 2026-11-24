@@ -16,10 +16,24 @@
     add    { name, klass, score }      -> { row }
     update { id, name?, klass?, score?, hidden? } -> { row }
     delete { id }                      -> {}
+    accounts                           -> { accounts }   (player accounts for competition mode)
+    account-update { id, displayName?, klass?, password? } -> { account }
+    account-delete { id }              -> {}
+
+  Only admins can change a player's password (players can't).
 */
-import crypto from "node:crypto";
 import * as L from "./logic";
+import {
+  sha256,
+  cleanUsername,
+  hashPassword,
+  checkPassword,
+  DUMMY_HASH,
+  newToken,
+  isToken,
+} from "./password";
 import type { DB, LeaderboardRow, AdminRow, AdminSessionRow } from "./db";
+import { listAccounts, updateAccount, deleteAccount, publicAccount } from "./accounts";
 import {
   json,
   fail,
@@ -38,29 +52,8 @@ const MAX_SCORE = 1_000_000;
 const LOGIN_FAILS = 8; // failed logins allowed per 15 minutes (per IP and per username)
 const FAIL_WINDOW = 15 * 60_000;
 
-const sha256 = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
-const scrypt = (pw: string, salt: Buffer) =>
-  crypto.scryptSync(pw, salt, 64, { N: 16384, r: 8, p: 1 });
-
 /* ---- users ---- */
-export const cleanUsername = (u: unknown): string | null =>
-  typeof u === "string" && /^[a-zA-Z0-9._-]{2,32}$/.test(u.trim())
-    ? u.trim().toLowerCase()
-    : null;
-
-export function hashPassword(pw: string): string {
-  const salt = crypto.randomBytes(16);
-  return `scrypt$${salt.toString("hex")}$${scrypt(pw, salt).toString("hex")}`;
-}
-
-const DUMMY_HASH = hashPassword(crypto.randomBytes(16).toString("hex"));
-function checkPassword(pw: string, stored: string): boolean {
-  const [kind, salt, hash] = String(stored).split("$");
-  if (kind !== "scrypt" || !salt || !hash) return false;
-  const want = Buffer.from(hash, "hex");
-  const got = scrypt(pw, Buffer.from(salt, "hex"));
-  return got.length === want.length && crypto.timingSafeEqual(got, want);
-}
+export { cleanUsername, hashPassword };
 
 export function addAdmin(db: DB, username: unknown, password: unknown): string {
   const u = cleanUsername(username);
@@ -83,7 +76,7 @@ export function removeAdmin(db: DB, username: unknown): number {
 
 /* ---- sessions ---- */
 export function adminFromToken(db: DB, token: string | null | undefined): string | null {
-  if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  if (!isToken(token)) return null;
   const s = db
     .prepare("select username, expires_at from admin_sessions where id = ?")
     .get(sha256(token)) as Pick<AdminSessionRow, "username" | "expires_at"> | undefined;
@@ -110,26 +103,39 @@ export type AdminLeaderboardRow = {
   klass: string;
   score: number;
   hidden: boolean;
-  player: boolean; // false = added by an admin
+  account: string | null; // username of the player's account; null = added by an admin
   achievedAt: number;
 };
 
-const publicRow = (r: LeaderboardRow): AdminLeaderboardRow => ({
+type RowWithUser = LeaderboardRow & { username?: string | null };
+const publicRow = (r: RowWithUser): AdminLeaderboardRow => ({
   id: r.id,
   name: r.name,
   klass: r.klass,
   score: r.best,
   hidden: !!r.hidden,
-  player: r.player_id !== null, // false = added by an admin
+  account: r.account_id !== null ? (r.username ?? "?") : null,
   achievedAt: r.achieved_at,
 });
 const validScore = (v: unknown): v is number =>
   Number.isInteger(v) && (v as number) >= 0 && (v as number) <= MAX_SCORE;
 
-const getRow = (db: DB, id: unknown): LeaderboardRow | undefined =>
+const getRow = (db: DB, id: unknown): RowWithUser | undefined =>
   Number.isInteger(id) || typeof id === "bigint"
-    ? (db.prepare("select * from leaderboard where id = ?").get(id) as LeaderboardRow | undefined)
+    ? (db
+        .prepare(
+          `select l.*, a.username from leaderboard l
+           left join accounts a on a.id = l.account_id where l.id = ?`,
+        )
+        .get(id) as RowWithUser | undefined)
     : undefined;
+
+const ACCOUNT_ERRORS = {
+  not_found: 404,
+  bad_name: 400,
+  bad_klass: 400,
+  bad_password: 400,
+} as const;
 
 /* ---- the API ---- */
 export async function handleAdmin(db: DB, req: Request): Promise<Response> {
@@ -165,7 +171,7 @@ export async function handleAdmin(db: DB, req: Request): Promise<Response> {
       return fail(401, "wrong_login");
     }
     db.prepare("delete from admin_sessions where expires_at < ?").run(now);
-    const fresh = crypto.randomBytes(32).toString("base64url");
+    const fresh = newToken();
     db.prepare("insert into admin_sessions (id, username, expires_at) values (?, ?, ?)").run(
       sha256(fresh),
       u,
@@ -201,11 +207,13 @@ export async function handleAdmin(db: DB, req: Request): Promise<Response> {
       const klass = L.isClass(body.klass) ? body.klass : null;
       const rows = db
         .prepare(
-          `select * from leaderboard ${klass ? "where klass = ?" : ""}
-           order by best desc, achieved_at asc limit 1000`,
+          `select l.*, a.username from leaderboard l
+           left join accounts a on a.id = l.account_id
+           ${klass ? "where l.klass = ?" : ""}
+           order by l.best desc, l.achieved_at asc limit 1000`,
         )
         .all(...(klass ? [klass] : []))
-        .map((r) => publicRow(r as LeaderboardRow));
+        .map((r) => publicRow(r as RowWithUser));
       return json(200, { rows });
     }
 
@@ -216,7 +224,7 @@ export async function handleAdmin(db: DB, req: Request): Promise<Response> {
       if (!validScore(body.score)) return fail(400, "bad_score");
       const r = db
         .prepare(
-          `insert into leaderboard (player_id, name, klass, best, achieved_at, updated_at)
+          `insert into leaderboard (account_id, name, klass, best, achieved_at, updated_at)
            values (null, ?, ?, ?, ?, ?)`,
         )
         .run(name, body.klass, body.score, now, now);
@@ -243,9 +251,19 @@ export async function handleAdmin(db: DB, req: Request): Promise<Response> {
         next.best = body.score;
       }
       if (body.hidden !== undefined) next.hidden = body.hidden ? 1 : 0;
-      db.prepare(
-        "update leaderboard set name = ?, klass = ?, best = ?, hidden = ?, updated_at = ? where id = ?",
-      ).run(next.name, next.klass, next.best, next.hidden, now, old.id);
+      db.transaction(() => {
+        db.prepare(
+          "update leaderboard set name = ?, klass = ?, best = ?, hidden = ?, updated_at = ? where id = ?",
+        ).run(next.name, next.klass, next.best, next.hidden, now, old.id);
+        // a player's row shows their account's name and class: change both
+        if (old.account_id !== null)
+          db.prepare("update accounts set display_name = ?, klass = ?, updated_at = ? where id = ?").run(
+            next.name,
+            next.klass,
+            now,
+            old.account_id,
+          );
+      })();
       const row = getRow(db, old.id)!;
       log(db, admin, "update", { before: publicRow(old), after: publicRow(row) });
       return json(200, { row: publicRow(row) });
@@ -256,6 +274,34 @@ export async function handleAdmin(db: DB, req: Request): Promise<Response> {
       if (!old) return fail(404, "not_found");
       db.prepare("delete from leaderboard where id = ?").run(old.id);
       log(db, admin, "delete", publicRow(old));
+      return json(200, {});
+    }
+
+    case "accounts":
+      return json(200, { accounts: listAccounts(db) });
+
+    case "account-update": {
+      const r = updateAccount(
+        db,
+        body.id,
+        { displayName: body.displayName, klass: body.klass, password: body.password },
+        now,
+      );
+      if (r.error) return fail(ACCOUNT_ERRORS[r.error], r.error);
+      // never log the password itself
+      log(db, admin, "account-update", {
+        username: r.after.username,
+        before: { displayName: r.before.display_name, klass: r.before.klass },
+        after: { displayName: r.after.display_name, klass: r.after.klass },
+        newPassword: body.password !== undefined,
+      });
+      return json(200, { account: { ...publicAccount(r.after), id: r.after.id } });
+    }
+
+    case "account-delete": {
+      const a = deleteAccount(db, body.id);
+      if (!a) return fail(404, "not_found");
+      log(db, admin, "account-delete", publicAccount(a));
       return json(200, {});
     }
 

@@ -563,7 +563,69 @@ canvas {
   font-size: 0.85em;
   margin: 0.8em 0 0.3em;
 }
-.card input[type="text"] {
+/* competition: log in / new account / logged in. The new-account form is tall,
+   so the card scrolls inside the game frame when needed. */
+#compForm .card {
+  max-height: calc(100% - 3.6em);
+  margin-top: 3em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#compForm .card label {
+  margin-top: 0.7em;
+}
+.card .hint {
+  display: block;
+  margin: 0.3em 0 0;
+  text-align: left;
+  font-size: 0.75em;
+  opacity: 0.75;
+}
+.card p.hint {
+  text-align: center;
+  font-size: 0.85em;
+  margin: -0.3em 0 0.2em;
+}
+.card .who {
+  margin: 0.2em 0 0.4em;
+  line-height: 1.5;
+}
+.card .who strong {
+  font-size: 1.2em;
+}
+.card .who small {
+  opacity: 0.75;
+}
+.formmsg {
+  min-height: 1.2em;
+  margin: 0.7em 0 0;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: #ffb3ae;
+}
+.formmsg:empty {
+  margin: 0;
+  min-height: 0;
+}
+.textlink {
+  display: block;
+  margin: 0.9em auto 0;
+  padding: 0.2em 0.4em;
+  font: 800 0.9em var(--font-body);
+  color: var(--aurora);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.textlink:focus-visible {
+  outline: 3px solid var(--beak);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.card input[type="text"],
+.card input[type="password"] {
   width: 100%;
   padding: 0.7em 0.8em;
   font: inherit;

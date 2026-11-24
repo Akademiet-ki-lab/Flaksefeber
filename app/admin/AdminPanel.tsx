@@ -2,31 +2,11 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { AdminLeaderboardRow } from "../../lib/server/admin";
+import { api, errorOf, ERRORS } from "./api";
+import AccountsPanel from "./AccountsPanel";
 
 type Row = AdminLeaderboardRow;
 type Editing = { id: number; name: string; klass: string; score: string };
-
-const ERRORS: Record<string, string> = {
-  bad_name: "Navnet må ha 1–20 tegn.",
-  bad_klass: "Velg en klasse.",
-  bad_score: "Score må være et helt tall fra 0 og oppover.",
-  not_found: "Raden finnes ikke lenger. Lista er lastet på nytt.",
-};
-
-async function api<T = Record<string, never>>(action: string, body: object = {}): Promise<T> {
-  const r = await fetch("/api/admin", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...body }),
-  });
-  if (r.status === 401) {
-    window.location.href = "/admin/login";
-    throw new Error("logged_out");
-  }
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || "error");
-  return data as T;
-}
 
 const toScore = (v: string) => (/^\d+$/.test(String(v).trim()) ? Number(v) : NaN);
 
@@ -38,8 +18,8 @@ export default function AdminPanel({ username, classes }: { username: string; cl
   const [editing, setEditing] = useState<Editing | null>(null);
   const [add, setAdd] = useState({ name: "", klass: classes[0], score: "" });
 
-  const say = (text: string, bad = false) => setMsg({ text, bad });
-  const errorOf = (e: unknown) => (e instanceof Error ? e.message : "error");
+  // stable, so panels that get it as a prop don't reload on every render
+  const say = useCallback((text: string, bad = false) => setMsg({ text, bad }), []);
   const oops = (e: unknown) => {
     if (errorOf(e) !== "logged_out") say(ERRORS[errorOf(e)] || "Noe gikk galt.", true);
   };
@@ -269,7 +249,13 @@ export default function AdminPanel({ username, classes }: { username: string; cl
                       <td className="ffa-num">{r.score}</td>
                       <td>
                         {r.hidden && <span className="ffa-tag">Skjult</span>}
-                        {!r.player && <span className="ffa-tag ffa-tag-admin">Lagt til av admin</span>}
+                        {r.account ? (
+                          <span className="ffa-tag" title="Brukeren som har denne raden">
+                            @{r.account}
+                          </span>
+                        ) : (
+                          <span className="ffa-tag ffa-tag-admin">Lagt til av admin</span>
+                        )}
                       </td>
                       <td className="ffa-actions">
                         <button
@@ -296,6 +282,8 @@ export default function AdminPanel({ username, classes }: { username: string; cl
           </div>
         )}
       </section>
+
+      <AccountsPanel classes={classes} say={say} onChanged={load} />
     </main>
   );
 }
