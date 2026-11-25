@@ -402,7 +402,9 @@ export function startGame() {
   const grads: Record<string, CanvasGradient> = {};
   function fit() {
     const r = stage.getBoundingClientRect();
-    const s = Math.max(0.2, Math.min(r.width / W, r.height / H, 1.35));
+    // fill the window's height (the cap only stops it on huge screens); the
+    // canvas resolution is capped below, so a bigger game isn't slower
+    const s = Math.max(0.2, Math.min(r.width / W, r.height / H, 3));
     frameEl.style.width = W * s + "px";
     frameEl.style.height = H * s + "px";
     frameEl.style.fontSize = Math.max(11, 16 * s) + "px";
@@ -981,14 +983,14 @@ export function startGame() {
         : "Ingen XP denne gangen. Du får 1 XP for hvert " +
           TREES_PER_XP +
           ". tre.";
-    if (gameMode === "comp")
-      xpText = "Konkurransescoren lagres på den felles topplista.";
+    if (gameMode === "comp") xpText = ""; // no XP in competition mode
     if (xp >= MAX_XP && gameMode !== "comp")
       xpText = "Maks level (" + MAX_XP + ")! " + xpText;
     if (saveNote) xpText = saveNote;
     if (runUnlocked.length)
       xpText += " Låst opp: " + runUnlocked.join(", ") + "!";
     endXp.textContent = xpText;
+    endXp.hidden = !xpText;
     shareMsg.textContent = "";
     shareOut.hidden = true;
     endEl.hidden = false;
