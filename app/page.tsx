@@ -1,14 +1,14 @@
 import Game from "./Game";
 import OldLeaderboard from "./OldLeaderboard";
-import { databaseVersion, getDb, legacyLeaderboard, legacyFetchedAt } from "../lib/server/db";
+import { databaseVersion, getDb, allTimeLeaderboard, legacyFetchedAt } from "../lib/server/db";
 
-// reads the old leaderboard from the database on each visit
+// reads the all-time leaderboard (old + current results) from the database on each visit
 export const dynamic = "force-dynamic";
 
 export default function Page() {
   return (
     <div className="layout">
-      <OldLeaderboard rows={legacyLeaderboard(getDb())} fetchedAt={legacyFetchedAt} />
+      <OldLeaderboard rows={allTimeLeaderboard(getDb())} fetchedAt={legacyFetchedAt} />
       <div className="stage" id="stage">
         <div className="frame" id="frame">
           <canvas
@@ -291,6 +291,9 @@ export default function Page() {
           >
             <div className="card">
               <h2 id="lbTitle">Toppliste</h2>
+              <p className="hint">
+                Topplisten nullstilles hver mandag kl. 00:00 og viser ukens beste.
+              </p>
               <div className="tabs" id="lbTabs"></div>
               <div className="tbl" id="lbRows"></div>
               <button className="btn" id="lbClose" type="button">
