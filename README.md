@@ -67,6 +67,16 @@ Velg **Konkurranse** fra menyen. Konkurranse krever en bruker. Vanlig modus gjø
 
 Konkurranserunden har ingen målscore og gir ikke XP eller arenaopplåsing. Serveren kontrollerer rundene og lagrer kun brukerens beste resultat. Resultatet hører til brukeren, så det er det samme uansett hvilken PC eleven spiller på. Topplista kan vises samlet eller filtrert på klasse.
 
+## Ukentlig nullstilling og All time leaderboard
+
+Topplisten i konkurransemodus nullstilles **hver mandag kl. 00:00 (norsk tid)**. Før det flyttes alle resultatene til tabellen `leaderboard_history`, så ingenting går tapt. Det er ingen planlagt jobb: første forespørsel etter mandag 00:00 gjør nullstillingen (`rollWeek` i `lib/server/db.ts`, kalt fra `getDb`). Den virker derfor også om serveren har vært nede over midnatt. Første gang koden kjører, noteres bare uken, og ingenting nullstilles.
+
+«All time leaderboard» til venstre for spillet slår sammen den gamle topplista, ukene som er over og den løpende topplista. Hver person vises én gang med beste score:
+
+- Hver konto er én person. To kontoer med samme navn og klasse slås aldri sammen.
+- Gamle resultater har ingen kontoer. De slås sammen når navn og klasse er like, og med en konto bare hvis nøyaktig én konto har samme navn og klasse.
+- Rader som admin har skjult, og rader uten poeng, vises ikke.
+
 ## Bevaring av gammel toppliste
 
 Den gamle topplista fra Supabase-versjonen beholdes lokalt i SQLite og vises på store skjermer til venstre for spillet. Originaldataene ligger i `lib/server/legacy-leaderboard.json` og kopieres til `legacy_leaderboard` ved oppstart.

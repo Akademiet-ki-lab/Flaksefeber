@@ -1,7 +1,7 @@
 import type { LegacyRow } from "../lib/server/db";
 
-// The leaderboard from before the switch to the new server. Read-only, for
-// looking back at who led. Shown to the left of the game on wide screens.
+// The all-time leaderboard: results from the old server and from competition
+// mode together. Read-only. Shown to the left of the game on wide screens.
 export default function OldLeaderboard({ rows, fetchedAt }: { rows: LegacyRow[]; fetchedAt: string }) {
   return (
     <aside className="oldlb" aria-labelledby="oldlbTitle">
