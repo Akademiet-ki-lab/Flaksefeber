@@ -6,7 +6,7 @@ export default function OldLeaderboard({ rows, fetchedAt }: { rows: LegacyRow[];
   return (
     <aside className="oldlb" aria-labelledby="oldlbTitle">
       <div className="oldlb-head">
-        <h2 id="oldlbTitle">Gammel leaderboard</h2>
+        <h2 id="oldlbTitle">All time leaderboard</h2>
       </div>
       {rows.length === 0 ? (
         <p className="oldlb-note">Ingen resultater.</p>
