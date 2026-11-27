@@ -67,6 +67,8 @@ Velg **Konkurranse** fra menyen. Konkurranse krever en bruker. Vanlig modus gjø
 
 Konkurranserunden har ingen målscore og gir ikke XP eller arenaopplåsing. Serveren kontrollerer rundene og lagrer kun brukerens beste resultat. Resultatet hører til brukeren, så det er det samme uansett hvilken PC eleven spiller på. Topplista kan vises samlet eller filtrert på klasse.
 
+I konkurransemodus øker farten for hvert 10. tre, men **slutter å øke etter 180 trær** (`SPEED_STOP_AT` i `lib/game/sim.ts`). Etter **200 trær** kommer en **snøstorm** (`STORM_AT`): skrå snøstriper og en lys dis som kommer og går i vindkast. Stormen er bare tegning i nettleseren (`lib/game/client.ts`). Den endrer ikke spillet, og serveren regner ikke med den.
+
 ## Ukentlig nullstilling og All time leaderboard
 
 Topplisten i konkurransemodus nullstilles **hver mandag kl. 00:00 (norsk tid)**. Før det flyttes alle resultatene til tabellen `leaderboard_history`, så ingenting går tapt. Det er ingen planlagt jobb: første forespørsel etter mandag 00:00 gjør nullstillingen (`rollWeek` i `lib/server/db.ts`, kalt fra `getDb`). Den virker derfor også om serveren har vært nede over midnatt. Første gang koden kjører, noteres bare uken, og ingenting nullstilles.

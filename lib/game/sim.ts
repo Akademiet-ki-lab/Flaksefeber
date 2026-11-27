@@ -69,6 +69,7 @@ const CLASSES = Object.freeze([
   "3STB",
   "Påbygg",
   "Lærere",
+  "Annet",
 ] as const);
 export type Klass = (typeof CLASSES)[number];
 
@@ -98,6 +99,8 @@ const CONST = Object.freeze({
   COMP_STEP_EVERY: 10, // trees between each speed increase
   COMP_STEP_BOOST: 0.15,
   COMP_MAX_SPEED: 7.5, // the eagle never moves more than this far per step
+  SPEED_STOP_AT: 180, // competition: the speed stops rising after this many trees
+  STORM_AT: 200, // competition: a snowstorm (drawing only) starts after this many trees
   MAX_FRAMES_COMP: 108000, // technical cap for one run (30 minutes)
   CLASSES,
   ARENA_COUNT: 10,
@@ -116,6 +119,7 @@ const {
   COMP_STEP_EVERY,
   COMP_STEP_BOOST,
   COMP_MAX_SPEED,
+  SPEED_STOP_AT,
   GRAV,
   FLAP,
   MAXFALL,
@@ -184,7 +188,7 @@ function hitTree(s: State, t: Tree): boolean {
   return false;
 }
 
-// comp = competition mode (no goal, faster every COMP_STEP_EVERY trees)
+// comp = competition mode (no goal, faster every COMP_STEP_EVERY trees, up to SPEED_STOP_AT)
 function create(seed: number, comp?: boolean): State {
   const s: State = {
     comp: !!comp,
@@ -220,7 +224,7 @@ function step(s: State, flap: boolean): StepEvents {
   const target = s.comp
     ? Math.min(
         COMP_MAX_SPEED,
-        BASE_SPEED + Math.floor(s.score / COMP_STEP_EVERY) * COMP_STEP_BOOST,
+        BASE_SPEED + Math.floor(Math.min(s.score, SPEED_STOP_AT) / COMP_STEP_EVERY) * COMP_STEP_BOOST,
       )
     : BASE_SPEED + Math.floor(s.score / STEP_EVERY) * STEP_BOOST;
   s.speed += (target - s.speed) * 0.04;
