@@ -13,6 +13,50 @@ const t = (name: string, fn: () => void) => {
   console.log("ok  " + name);
 };
 
+t("the class list has Annet, and unknown classes are refused", () => {
+  assert.ok(L.isClass("Annet"));
+  assert.ok(L.isClass("Lærere"));
+  assert.ok(!L.isClass("annet"));
+  assert.ok(!L.isClass("4XYZ"));
+  assert.ok(!L.isClass(undefined));
+});
+
+t("competition: the speed rises until 180 trees and then stays the same", () => {
+  const { BASE_SPEED, COMP_STEP_BOOST, COMP_STEP_EVERY, SPEED_STOP_AT, STORM_AT } = Sim.CONST;
+  assert.strictEqual(SPEED_STOP_AT, 180);
+  assert.strictEqual(STORM_AT, 200);
+  const cap = BASE_SPEED + (SPEED_STOP_AT / COMP_STEP_EVERY) * COMP_STEP_BOOST;
+  // fly straight and make the eagle unbeatable, only the speed is of interest
+  const speedAt = (score: number) => {
+    const s = Sim.create(7, true);
+    s.score = score;
+    for (let i = 0; i < 600; i++) {
+      s.y = Sim.CONST.START_Y;
+      s.vy = 0;
+      s.invuln = 100;
+      s.feather = false;
+      s.score = score; // keep the score where it is, so the speed target stays put
+      Sim.step(s, false);
+    }
+    return s.speed;
+  };
+  assert.ok(Math.abs(speedAt(100) - (BASE_SPEED + 10 * COMP_STEP_BOOST)) < 0.01, "still rising at 100 trees");
+  assert.ok(Math.abs(speedAt(180) - cap) < 0.01, "full speed at 180");
+  assert.ok(Math.abs(speedAt(260) - cap) < 0.01, "no faster at 260");
+  assert.ok(Math.abs(speedAt(1000) - cap) < 0.01, "no faster at 1000");
+  // normal mode is not changed: it ends at 100 trees, with its own steps
+  const normal = Sim.create(7, false);
+  normal.score = 80;
+  for (let i = 0; i < 600; i++) {
+    normal.y = Sim.CONST.START_Y;
+    normal.vy = 0;
+    normal.invuln = 100;
+    normal.score = 80;
+    Sim.step(normal, false);
+  }
+  assert.ok(Math.abs(normal.speed - (BASE_SPEED + 4 * Sim.CONST.STEP_BOOST)) < 0.01);
+});
+
 // simple bot: aims for the middle of the next opening
 function play(seed: number, maxFrames: number) {
   const s = Sim.create(seed);

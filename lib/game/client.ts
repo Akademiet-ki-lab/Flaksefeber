@@ -69,6 +69,13 @@ interface Flake {
   col: string;
   a: number;
 }
+/** One streak of the snowstorm (competition, after STORM_AT trees). */
+interface StormFlake {
+  x: number;
+  y: number;
+  r: number; // thickness
+  k: number; // 0..1: how fast and how long it is
+}
 /** Hanging liana in the background (rainforest). */
 interface Vine {
   x: number;
@@ -163,6 +170,7 @@ export function startGame() {
     MAX_XP, // max level; level = total XP
     TREES_PER_XP, // 1 XP for every 10th tree
     FEATHER_AT, // a golden feather appears after this many trees in a run
+    STORM_AT, // competition: a snowstorm (only drawn, changes nothing in the game) after this many trees
   } = Sim.CONST;
   const LEGACY_KEYS = [
     "orneflukt-auth", // old Supabase login, no longer used
@@ -476,6 +484,9 @@ export function startGame() {
     arenaMsg = "",
     arenaToast = 0,
     bests = ARENAS.map(() => 0); // record per arena
+  let storm = 0, // 0..1: how strong the snowstorm is (fades in and out)
+    stormNote = 0, // frames left of the "snowstorm" message
+    stormFlakes: StormFlake[] = [];
   let flakes: Flake[] = [],
     vines: Vine[] = []; // random hanging lianas in the background (rainforest)
 
@@ -807,6 +818,8 @@ export function startGame() {
     runUnlocked = [];
     bestBeaten = false;
     toast = 0;
+    storm = 0;
+    stormNote = 0;
     sim = Sim.create(seed as number, gameMode === "comp"); // from the server, or random above
     run = {
       runToken,
@@ -850,6 +863,7 @@ export function startGame() {
     score = sim!.score;
     syncTrees();
     if (ev.scored) scorePop = 1;
+    if (ev.scored && sim!.comp && sim!.score === STORM_AT) stormNote = 180;
     if (ev.pickup) {
       toast = 150;
       puff(ev.pickup.x, ev.pickup.y, 14, "#f5c542", 1.4, 0.03);
@@ -1358,6 +1372,7 @@ export function startGame() {
       if (fl.x < -10) fl.x = W + 10;
       else if (fl.x > W + 10) fl.x = -10;
     }
+    updateStorm(f);
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.x += p.vx * f;
@@ -1429,6 +1444,7 @@ export function startGame() {
     eagle.rot +=
       (clamp(sim!.vy * 0.07, -0.5, 1.2) - eagle.rot) * Math.min(1, 0.25 * f);
     if (toast > 0) toast = Math.max(0, toast - f);
+    if (stormNote > 0) stormNote = Math.max(0, stormNote - f);
     if (arenaToast > 0) arenaToast = Math.max(0, arenaToast - f);
   }
 
@@ -2166,6 +2182,60 @@ export function startGame() {
     }
   }
 
+  /* ---- snowstorm: only for show, nothing here touches the simulation ---- */
+  const stormOn = () => state === "play" && !!sim && sim.comp && sim.score >= STORM_AT;
+  // 0..1, comes and goes in gusts (steady with reduced motion)
+  const gust = () =>
+    reduce
+      ? 0.5
+      : clamp(0.5 + 0.35 * Math.sin(frame * 0.011) + 0.15 * Math.sin(frame * 0.037 + 1.3), 0, 1);
+  function updateStorm(f: number) {
+    storm = clamp(storm + (stormOn() ? 0.007 : -0.02) * f, 0, 1);
+    if (storm <= 0) return;
+    if (!stormFlakes.length) {
+      const n = reduce ? 50 : 150;
+      stormFlakes = Array.from({ length: n }, () => ({
+        x: Math.random() * (W + 80),
+        y: Math.random() * H,
+        r: 1 + Math.random() * 1.8,
+        k: Math.random(),
+      }));
+    }
+    const wind = 0.7 + 0.8 * gust();
+    for (const fl of stormFlakes) {
+      fl.x -= (5 + fl.k * 6) * wind * f;
+      fl.y += (1.6 + fl.k * 2) * f;
+      if (fl.y > H + 6) {
+        fl.y = -6;
+        fl.x = Math.random() * (W + 80);
+      }
+      if (fl.x < -40) fl.x = W + 40;
+    }
+  }
+  // a pale haze over the trees (the eagle is drawn after it, so it stays clear)
+  function drawStormHaze() {
+    if (storm <= 0) return;
+    ctx.fillStyle = rgba(C["--snow"], storm * (0.1 + 0.32 * gust()));
+    ctx.fillRect(-10, -10, W + 20, H + 20);
+  }
+  // streaks of snow blowing sideways, in front of everything
+  function drawStormFlakes() {
+    if (storm <= 0) return;
+    const wind = 0.7 + 0.8 * gust();
+    ctx.strokeStyle = C["--snow"];
+    ctx.lineCap = "round";
+    for (const fl of stormFlakes) {
+      ctx.globalAlpha = storm * (0.35 + 0.35 * fl.k);
+      ctx.lineWidth = fl.r;
+      ctx.beginPath();
+      ctx.moveTo(fl.x, fl.y);
+      ctx.lineTo(fl.x + (5 + fl.k * 6) * wind * 2.2, fl.y - (1.6 + fl.k * 2) * 2.2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.lineCap = "butt";
+  }
+
   function drawFlakes() {
     const wt = A.weather;
     for (const fl of flakes) {
@@ -2410,6 +2480,20 @@ export function startGame() {
       ctx.fillText("Gullfjær! Du tåler ett tretreff", W / 2, 190);
       ctx.restore();
     }
+    if (stormNote > 0 && state === "play") {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, stormNote / 30);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.font = '800 16px "Nunito Sans", system-ui, sans-serif';
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = rgba(C["--night"], 0.7);
+      ctx.strokeText("Snøstorm! Sikten blir dårlig", W / 2, 215);
+      ctx.fillStyle = C["--snow"];
+      ctx.fillText("Snøstorm! Sikten blir dårlig", W / 2, 215);
+      ctx.restore();
+    }
     if (feather && state === "play") {
       drawFeather(W / 2 - 38, 142, 1.3);
       ctx.save();
@@ -2478,7 +2562,9 @@ export function startGame() {
     drawGround();
     drawFlakes();
     drawParticles();
+    drawStormHaze();
     drawEagle();
+    drawStormFlakes();
 
     ctx.restore();
     if (flash > 0) {
